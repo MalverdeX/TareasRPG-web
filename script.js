@@ -22,6 +22,7 @@ class TareasRPG {
             lastVisitDate: null,
             lastView: 'dashboard'
         };
+        // Bandera para evitar giros simultáneos en la máquina de botín
         this.isLootSpinning = false;
         
         this.items = [
