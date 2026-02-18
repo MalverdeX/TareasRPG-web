@@ -18,6 +18,17 @@ class TareasRPG {
         this.taskStreaks = {}; // Guardar rachas de cada tarea
         this.currentView = 'dashboard';
         this.currentDate = new Date();
+        this.appState = {
+            lastVisitDate: null,
+            lastView: 'dashboard'
+        };
+        // Bandera para evitar giros simultáneos en la máquina de botín
+        this.isLootSpinning = false;
+        this.weeklyGoal = 18;
+        this.recentAchievements = [];
+        this.pendingDeleteTask = null;
+        this.undoDeleteTimer = null;
+        this.uiSettings = { reducedMotion: false };
         
         this.items = [
             { id: 1, name: 'Espada de Hierro', type: 'weapon', rarity: 'common', price: 50, stats: { attack: 5 }, icon: '⚔️' },
@@ -36,6 +47,7 @@ class TareasRPG {
     init() {
         this.loadFromLocalStorage();
         this.setupEventListeners();
+        this.initializeStartupView();
         this.renderSchedule();
         this.renderTasks();
         this.renderCalendar();
@@ -43,13 +55,16 @@ class TareasRPG {
         this.renderDashboardSummary();
         this.renderInventory();
         this.renderMarket();
+        this.renderRecentAchievements();
     }
     
     setupEventListeners() {
         // Navegación
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                this.switchView(e.target.dataset.view);
+                const targetView = e.target.dataset.view;
+                if (!targetView) return;
+                this.switchView(targetView);
             });
         });
         
@@ -112,6 +127,29 @@ class TareasRPG {
         document.getElementById('claimReward').addEventListener('click', () => {
             this.claimReward();
         });
+
+        document.getElementById('dailyCheckinBtn').addEventListener('click', () => {
+            this.claimDailyCheckin();
+        });
+
+        document.getElementById('startJourneyBtn').addEventListener('click', () => {
+            this.startJourney();
+        });
+
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsModal').style.display = 'block';
+        });
+
+        document.getElementById('undoDeleteBtn').addEventListener('click', () => {
+            this.undoDeleteTask();
+        });
+
+        document.getElementById('reducedMotionToggle').addEventListener('change', (event) => {
+            this.uiSettings.reducedMotion = event.target.checked;
+            document.body.classList.toggle('reduced-motion', this.uiSettings.reducedMotion);
+            this.saveToLocalStorage();
+            this.showToast(this.uiSettings.reducedMotion ? 'Animaciones reducidas activadas.' : 'Animaciones reducidas desactivadas.');
+        });
     }
     
     switchView(viewName) {
@@ -125,6 +163,22 @@ class TareasRPG {
         document.getElementById(viewName).classList.add('active');
         document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
         this.currentView = viewName;
+        this.appState.lastView = viewName;
+        this.appState.lastVisitDate = this.formatDateInput(new Date());
+        this.saveToLocalStorage();
+    }
+
+    initializeStartupView() {
+        const today = this.formatDateInput(new Date());
+        const isFirstVisit = !this.appState.lastVisitDate;
+        const isNewDay = this.appState.lastVisitDate !== today;
+
+        if (isFirstVisit || isNewDay) {
+            this.switchView('dashboard');
+        } else {
+            const viewToShow = this.appState.lastView || 'dashboard';
+            this.switchView(viewToShow);
+        }
     }
 
     parseDateInput(dateString) {
@@ -175,7 +229,7 @@ class TareasRPG {
         const form = document.getElementById('taskForm');
         
         if (taskId) {
-            const task = this.tasks.find(t => t.id === taskId);
+            const task = this.tasks.find(t => String(t.id) === String(taskId));
             modalTitle.textContent = 'Editar Misión';
             document.getElementById('taskTitle').value = task.title;
             document.getElementById('taskDescription').value = task.description;
@@ -272,8 +326,11 @@ class TareasRPG {
         }
         
         if (taskId) {
-            const index = this.tasks.findIndex(t => t.id === taskId);
-            this.tasks[index] = { ...this.tasks[index], ...taskData };
+            const normalizedId = String(taskId);
+            const index = this.tasks.findIndex(t => String(t.id) === normalizedId);
+            if (index !== -1) {
+                this.tasks[index] = { ...this.tasks[index], ...taskData };
+            }
         } else {
             taskData.id = Date.now();
             this.tasks.push(taskData);
@@ -281,6 +338,10 @@ class TareasRPG {
         
         this.saveToLocalStorage();
         this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
+        this.renderSchedule();
+        this.renderCalendar();
         this.renderCalendar();
         this.renderSchedule(); // Agregar esta línea
         document.getElementById('taskModal').style.display = 'none';
@@ -334,7 +395,7 @@ class TareasRPG {
     }
     
     completeTask(taskId) {
-        const task = this.tasks.find(t => t.id === taskId);
+        const task = this.tasks.find(t => String(t.id) === String(taskId));
         if (!task || !this.canCompleteTask(task)) {
             if (!this.canCompleteTask(task)) {
                 alert('Aún no puedes completar esta misión. Debe esperar la fecha y hora establecidas.');
@@ -343,6 +404,7 @@ class TareasRPG {
         }
         
         task.completed = true;
+        task.completedAt = new Date().toISOString();
         
         // Calcular recompensas con bonificación de racha
         const streakBonus = this.calculateStreakBonus(task);
@@ -359,8 +421,11 @@ class TareasRPG {
             this.createRecurringTask(task);
         }
         
+        this.addAchievement(`✅ ${task.title} completada`);
         this.saveToLocalStorage();
         this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
     }
     
     calculateStreakBonus(task) {
@@ -479,14 +544,21 @@ class TareasRPG {
         if (this.pendingReward) {
             this.player.currentExp += this.pendingReward.exp;
             this.player.coins += this.pendingReward.coins;
-            
+
+            const previousLevel = this.player.level;
+
             // Verificar nivel
             while (this.player.currentExp >= this.player.maxExp) {
                 this.player.currentExp -= this.player.maxExp;
                 this.player.level++;
                 this.player.maxExp = Math.floor(this.player.maxExp * 1.5);
             }
-            
+
+            if (this.player.level > previousLevel) {
+                this.showLevelUpAnimation(this.player.level);
+                this.addAchievement(`🌟 Alcanzaste nivel ${this.player.level}`);
+            }
+
             this.updatePlayerStats();
             this.saveToLocalStorage();
             document.getElementById('rewardModal').style.display = 'none';
@@ -498,19 +570,45 @@ class TareasRPG {
         const pendingContainer = document.getElementById('pendingTasks');
         const completedContainer = document.getElementById('completedTasks');
         
-        const pendingTasks = this.tasks.filter(t => !t.completed);
-        const completedTasks = this.tasks.filter(t => t.completed);
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        const toMinutes = (time) => {
+            if (!time) return 24 * 60;
+            const [hours, minutes] = time.split(':').map(Number);
+            return (hours * 60) + minutes;
+        };
+
+        const pendingTasks = this.tasks
+            .filter(t => !t.completed)
+            .sort((a, b) => {
+                const byPriority = priorityOrder[a.priority] - priorityOrder[b.priority];
+                if (byPriority !== 0) return byPriority;
+                const byTime = toMinutes(a.time) - toMinutes(b.time);
+                if (byTime !== 0) return byTime;
+                return a.title.localeCompare(b.title, 'es');
+            });
+
+        const completedTasks = this.tasks
+            .filter(t => t.completed)
+            .sort((a, b) => b.id - a.id);
         
         pendingContainer.innerHTML = '';
         completedContainer.innerHTML = '';
         
-        pendingTasks.forEach(task => {
-            pendingContainer.appendChild(this.createTaskElement(task));
-        });
+        if (pendingTasks.length === 0) {
+            pendingContainer.innerHTML = '<div class="task-empty">No tienes misiones pendientes. ¡Gran trabajo! ⚔️</div>';
+        } else {
+            pendingTasks.forEach(task => {
+                pendingContainer.appendChild(this.createTaskElement(task));
+            });
+        }
         
-        completedTasks.forEach(task => {
-            completedContainer.appendChild(this.createTaskElement(task));
-        });
+        if (completedTasks.length === 0) {
+            completedContainer.innerHTML = '<div class="task-empty">Aún no hay misiones completadas hoy.</div>';
+        } else {
+            completedTasks.forEach(task => {
+                completedContainer.appendChild(this.createTaskElement(task));
+            });
+        }
 
         this.renderDashboardSummary();
     }
@@ -518,7 +616,7 @@ class TareasRPG {
     createTaskElement(task) {
         const taskEl = document.createElement('div');
         const canComplete = this.canCompleteTask(task);
-        taskEl.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''} ${!canComplete && !task.completed ? 'disabled' : ''}`;
+        taskEl.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''}`;
         
         // Calcular bonificación de racha
         const taskKey = `${task.title}_${task.repeat}`;
@@ -553,30 +651,107 @@ class TareasRPG {
             <p>${task.description || 'Sin descripción'}</p>
             <div class="task-meta">
                 <span>⭐ ${task.exp} EXP</span>
-                <span>� ${task.coins} monedas</span>
+                <span>💰 ${task.coins} monedas</span>
                 ${timeInfo}
                 ${streak > 0 ? `<span class="streak-indicator">🔥 ${streak} días</span>` : ''}
             </div>
             ${streakBonus ? `<div class="bonus-info">+${streakBonus.exp} EXP, +${streakBonus.coins} 💰 por racha</div>` : ''}
             ${!canComplete && !task.completed ? '<div class="time-warning">⏰ Aún no es tiempo de completar esta misión</div>' : ''}
             <div class="task-actions">
-                ${!task.completed ? `<button class="btn-complete" onclick="game.completeTask(${task.id})" ${!canComplete ? 'disabled' : ''}>Completar</button>` : ''}
-                <button class="btn-edit" onclick="game.openTaskModal(${task.id})">Editar</button>
-                <button class="btn-delete" onclick="game.deleteTask(${task.id})">Eliminar</button>
+                ${!task.completed ? `<button class="btn-complete" ${!canComplete ? 'disabled' : ''}>Completar</button>` : ''}
+                <button class="btn-edit" type="button">Editar</button>
+                <button class="btn-delete" type="button">Eliminar</button>
             </div>
         `;
+
+        const completeBtn = taskEl.querySelector('.btn-complete');
+        if (completeBtn) {
+            completeBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.completeTask(task.id);
+            });
+        }
+
+        const editBtn = taskEl.querySelector('.btn-edit');
+        if (editBtn) {
+            editBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.openTaskModal(task.id);
+            });
+        }
+
+        const deleteBtn = taskEl.querySelector('.btn-delete');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.deleteTask(task.id);
+            });
+        }
         
         return taskEl;
     }
     
     deleteTask(taskId) {
-        if (confirm('¿Estás seguro de que quieres eliminar esta misión?')) {
-            this.tasks = this.tasks.filter(t => t.id !== taskId);
-            this.saveToLocalStorage();
-            this.renderTasks();
+        const shouldDelete = typeof window.confirm === 'function'
+            ? window.confirm('¿Estás seguro de que quieres eliminar esta misión?')
+            : true;
+
+        if (!shouldDelete) return;
+
+        const normalizedId = String(taskId);
+        const taskToDelete = this.tasks.find(t => String(t.id) === normalizedId);
+
+        this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+
+        if (taskToDelete) {
+            this.pendingDeleteTask = { ...taskToDelete };
+            this.showUndoToast();
+            this.addAchievement(`🗑️ Eliminaste ${taskToDelete.title}`);
+        }
+
+        this.saveToLocalStorage();
+        this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
+        this.showToast('Misión eliminada.');
+    }
+
+    undoDeleteTask() {
+        if (!this.pendingDeleteTask) return;
+
+        this.tasks.push(this.pendingDeleteTask);
+        this.pendingDeleteTask = null;
+        this.hideUndoToast();
+        this.saveToLocalStorage();
+        this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
+        this.showToast('Misión restaurada correctamente.');
+    }
+
+    showUndoToast() {
+        const undoToast = document.getElementById('undoDeleteToast');
+        if (!undoToast) return;
+
+        undoToast.classList.add('active');
+
+        if (this.undoDeleteTimer) {
+            clearTimeout(this.undoDeleteTimer);
+        }
+
+        this.undoDeleteTimer = setTimeout(() => {
+            this.pendingDeleteTask = null;
+            this.hideUndoToast();
+        }, 5000);
+    }
+
+    hideUndoToast() {
+        const undoToast = document.getElementById('undoDeleteToast');
+        if (undoToast) {
+            undoToast.classList.remove('active');
         }
     }
-    
+
     renderSchedule() {
         const scheduleGrid = document.getElementById('scheduleGrid');
         const hours = Array.from({length: 24}, (_, i) => `${i.toString().padStart(2, '0')}:00`);
@@ -653,14 +828,11 @@ class TareasRPG {
             });
         });
         
-        // Debug: mostrar información de tareas en consola
-        console.log('Renderizando horario con', this.tasks.length, 'tareas');
-        this.tasks.forEach(task => {
-            console.log('Tarea:', task.title, 'Tipo:', task.repeat, 'Hora:', task.time, 'Fecha:', task.date, 'Día semana:', task.dayOfWeek);
-        });
     }
     
     getTasksForTimeSlot(hour, dayOfWeek) {
+        const scheduleDayToJs = (scheduleDay) => (scheduleDay === 6 ? 0 : scheduleDay + 1);
+
         return this.tasks.filter(task => {
             if (task.completed) return false;
             
@@ -672,10 +844,9 @@ class TareasRPG {
                     // Tarea única: verificar si coincide con la fecha y hora
                     if (!task.date) return false;
                     const taskDate = this.parseDateInput(task.date);
+                    if (!taskDate) return false;
                     const taskDayOfWeek = taskDate.getDay(); // 0 = Domingo, 1 = Lunes, etc.
-                    // Convertir nuestro formato (0=Lunes) al formato JavaScript (0=Domingo)
-                    const scheduleDayOfWeek = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    return taskDayOfWeek === scheduleDayOfWeek;
+                    return taskDayOfWeek === scheduleDayToJs(dayOfWeek);
                     
                 case 'daily':
                     // Tarea diaria: siempre mostrar si la hora coincide
@@ -683,9 +854,7 @@ class TareasRPG {
                     
                 case 'weekly':
                     // Tarea semanal: verificar día de la semana
-                    // Convertir nuestro formato (0=Lunes) al formato JavaScript (0=Domingo)
-                    const scheduleDayForWeekly = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    return task.dayOfWeek === scheduleDayForWeekly;
+                    return task.dayOfWeek === scheduleDayToJs(dayOfWeek);
                     
                 case 'monthly':
                     // Tarea mensual: verificar día del mes
@@ -695,13 +864,14 @@ class TareasRPG {
                     const now = new Date();
                     const currentMonth = now.getMonth();
                     const currentYear = now.getFullYear();
-                    
-                    // Crear fecha para el día del mes actual en el día de la semana correspondiente
+
+                    // Crear fecha para el día del mes actual y validar que exista
                     const testDate = new Date(currentYear, currentMonth, monthlyDay);
-                    const testDayOfWeek = testDate.getDay();
-                    const scheduleDayForMonthly = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    
-                    return testDayOfWeek === scheduleDayForMonthly;
+                    if (testDate.getMonth() !== currentMonth || testDate.getDate() !== monthlyDay) {
+                        return false;
+                    }
+
+                    return testDate.getDay() === scheduleDayToJs(dayOfWeek);
                     
                 default:
                     return false;
@@ -745,7 +915,8 @@ class TareasRPG {
             dayEl.className = 'calendar-day';
             
             const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-            const dayTasks = this.tasks.filter(t => t.date === dateStr);
+            const dateObj = new Date(year, month, day);
+            const dayTasks = this.tasks.filter(t => this.isTaskScheduledForDate(t, dateObj));
             
             dayEl.innerHTML = `
                 <div style="font-weight: bold;">${day}</div>
@@ -768,6 +939,29 @@ class TareasRPG {
                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
         return months[month];
     }
+
+    isTaskScheduledForDate(task, dateObj) {
+        if (task.completed) return false;
+
+        const targetDate = this.formatDateInput(dateObj);
+
+        switch (task.repeat) {
+            case 'none':
+                return task.date === targetDate;
+            case 'daily':
+                return Boolean(task.time);
+            case 'weekly':
+                return task.dayOfWeek === dateObj.getDay();
+            case 'monthly': {
+                if (!task.date) return false;
+                const monthlyDate = this.parseDateInput(task.date);
+                return monthlyDate ? monthlyDate.getDate() === dateObj.getDate() : false;
+            }
+            default:
+                return false;
+        }
+    }
+
     
     isTaskForToday(task) {
         const now = new Date();
@@ -814,6 +1008,25 @@ class TareasRPG {
         });
 
         document.getElementById('dashboardDateLabel').textContent = `Hoy es ${dateLabel}. Enfoque total.`;
+
+        const weekly = this.getWeeklyProgress();
+        document.getElementById('weeklyProgressCount').textContent = weekly.completed;
+        document.getElementById('weeklyGoalCount').textContent = weekly.goal;
+        document.getElementById('weeklyProgressFill').style.width = `${Math.round(weekly.ratio * 100)}%`;
+        document.getElementById('weeklyProgressLabel').textContent = weekly.completed >= weekly.goal
+            ? '¡Cofre semanal desbloqueado! Ve a Cajas de Botín.'
+            : `Te faltan ${Math.max(weekly.goal - weekly.completed, 0)} misión(es) para el cofre semanal.`;
+
+        const today = this.formatDateInput(new Date());
+        const checked = this.appState.lastCheckinDate === today;
+        document.getElementById('checkinStatus').textContent = checked
+            ? 'Check-in diario reclamado. ¡Vuelve mañana para otro bonus!'
+            : 'Reclama tu bonus diario para mantener el hábito.';
+
+        const journeyTarget = availableNow.length > 0
+            ? `Tienes ${availableNow.length} misión(es) listas para completar.`
+            : 'Pulsa para iniciar tu jornada';
+        document.getElementById('missionHookText').textContent = journeyTarget;
     }
 
     updatePlayerStats() {
@@ -922,6 +1135,7 @@ class TareasRPG {
             this.updatePlayerStats();
             this.renderInventory();
             this.renderMarket();
+        this.renderRecentAchievements();
             this.saveToLocalStorage();
         } else {
             alert('No tienes suficientes monedas');
@@ -939,32 +1153,127 @@ class TareasRPG {
         this.saveToLocalStorage();
     }
     
-    openLootBox(rarity, price) {
-        if (this.player.coins >= price) {
+    async openLootBox(rarity, price) {
+        if (this.isLootSpinning) {
+            return;
+        }
+
+        if (this.player.coins < price) {
+            alert('No tienes suficientes monedas');
+            return;
+        }
+
+        this.isLootSpinning = true;
+        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = true);
+
+        try {
             this.player.coins -= price;
             this.updatePlayerStats();
-            
-            const items = this.getRandomLoot(rarity);
-            const item = items[Math.floor(Math.random() * items.length)];
-            
-            this.player.inventory.push({...item});
+
+            const rarityPool = this.getRandomLoot(rarity);
+            const wonItem = rarityPool[Math.floor(Math.random() * rarityPool.length)];
+
+            await this.animateLootMachine(rarity, wonItem);
+
+            this.player.inventory.push({ ...wonItem });
             this.renderInventory();
             this.saveToLocalStorage();
-            
-            alert(`¡Has obtenido: ${item.name}!`);
-        } else {
-            alert('No tienes suficientes monedas');
+            this.showLootRewardAnimation(rarity);
+            this.addAchievement(`🎁 Botín ${rarity}: ${wonItem.name}`);
+        } finally {
+            this.isLootSpinning = false;
+            document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = false);
         }
     }
-    
+
     getRandomLoot(rarity) {
+        const common = this.items.filter(i => i.rarity === 'common');
+        const rare = this.items.filter(i => i.rarity === 'rare');
+        const epic = this.items.filter(i => i.rarity === 'epic');
+
         const lootTable = {
-            common: this.items.filter(i => i.rarity === 'common'),
-            rare: this.items.filter(i => i.rarity === 'rare'),
-            epic: this.items.filter(i => i.rarity === 'epic')
+            common,
+            rare: [...common, ...rare, ...rare],
+            epic: [...common, ...rare, ...epic, ...epic]
         };
-        
-        return lootTable[rarity] || lootTable.common;
+
+        return lootTable[rarity] || common;
+    }
+
+    async animateLootMachine(rarity, wonItem) {
+        const reelTrack = document.getElementById('lootReelTrack');
+        const resultEl = document.getElementById('lootResult');
+
+        if (!reelTrack || !resultEl) {
+            alert(`¡Has obtenido: ${wonItem.name}!`);
+            return;
+        }
+
+        const previewPool = [...this.items, ...this.items.filter(i => i.rarity !== 'common')];
+        const cardWidth = 120;
+        const totalCards = 28;
+
+        const reelItems = [];
+        for (let i = 0; i < totalCards - 1; i++) {
+            const randomItem = previewPool[Math.floor(Math.random() * previewPool.length)];
+            reelItems.push(randomItem);
+        }
+        reelItems.push(wonItem);
+
+        reelTrack.innerHTML = reelItems.map(item => `
+            <article class="reel-item rarity-${item.rarity}">
+                <div class="reel-icon">${item.icon}</div>
+                <div class="reel-name">${item.name}</div>
+            </article>
+        `).join('');
+
+        reelTrack.style.transition = 'none';
+        reelTrack.style.transform = 'translateX(0px)';
+        resultEl.textContent = 'Girando ruleta arcana...';
+
+        void reelTrack.offsetHeight;
+
+        const offsetToLast = (totalCards - 3) * cardWidth;
+        reelTrack.style.transition = 'transform 3.4s cubic-bezier(0.12, 0.8, 0.15, 1)';
+        reelTrack.style.transform = `translateX(-${offsetToLast}px)`;
+
+        await new Promise(resolve => setTimeout(resolve, 3450));
+
+        resultEl.innerHTML = `✨ Premio obtenido: <strong style="color:${this.getRarityColor(wonItem.rarity)}">${wonItem.icon} ${wonItem.name}</strong>`;
+        this.createLootParticles(rarity);
+    }
+
+    createLootParticles(rarity) {
+        const particlesContainer = document.getElementById('lootParticles');
+        if (!particlesContainer) return;
+
+        const particleByRarity = { common: 18, rare: 36, epic: 64 };
+        const colorByRarity = {
+            common: ['#8ed081', '#b8e994'],
+            rare: ['#f7b731', '#f8c291', '#fa983a'],
+            epic: ['#f6e58d', '#ffbe76', '#e056fd', '#7ed6df']
+        };
+
+        particlesContainer.innerHTML = '';
+        const total = particleByRarity[rarity] || 20;
+        const colors = colorByRarity[rarity] || ['#ffffff'];
+
+        for (let i = 0; i < total; i++) {
+            const particle = document.createElement('span');
+            particle.className = 'loot-particle';
+            particle.style.left = `${Math.random() * 100}%`;
+            particle.style.top = `${60 + Math.random() * 30}%`;
+            particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.animationDelay = `${Math.random() * 0.25}s`;
+            particle.style.animationDuration = `${0.9 + Math.random() * 0.8}s`;
+            particle.style.setProperty('--dx', `${-90 + Math.random() * 180}px`);
+            particle.style.setProperty('--dy', `${-120 - Math.random() * 120}px`);
+            particlesContainer.appendChild(particle);
+        }
+
+        setTimeout(() => {
+            particlesContainer.innerHTML = '';
+        }, 2000);
     }
     
     getRarityColor(rarity) {
@@ -976,16 +1285,145 @@ class TareasRPG {
         return colors[rarity] || '#FFFFFF';
     }
     
+
+    getWeekKey(date = new Date()) {
+        const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+        const days = Math.floor((date - firstDayOfYear) / 86400000);
+        const weekNumber = Math.ceil((days + firstDayOfYear.getDay() + 1) / 7);
+        return `${date.getFullYear()}-W${weekNumber}`;
+    }
+
+    getWeeklyProgress() {
+        const currentWeek = this.getWeekKey();
+        const weeklyCompleted = this.tasks.filter(task => {
+            if (!task.completedAt) return false;
+            return this.getWeekKey(new Date(task.completedAt)) === currentWeek;
+        }).length;
+
+        return {
+            completed: weeklyCompleted,
+            goal: this.weeklyGoal,
+            ratio: Math.min(weeklyCompleted / this.weeklyGoal, 1)
+        };
+    }
+
+    claimDailyCheckin() {
+        const today = this.formatDateInput(new Date());
+        if (this.appState.lastCheckinDate === today) {
+            this.showToast('Ya reclamaste tu check-in de hoy.');
+            return;
+        }
+
+        this.player.coins += 20;
+        this.player.currentExp += 15;
+        this.appState.lastCheckinDate = today;
+        this.addAchievement('🎯 Check-in diario completado');
+        this.showToast('Check-in diario: +20 monedas, +15 EXP');
+        this.normalizeLevelAfterGain();
+        this.updatePlayerStats();
+        this.saveToLocalStorage();
+        this.renderDashboardSummary();
+    }
+
+    normalizeLevelAfterGain() {
+        const previousLevel = this.player.level;
+        while (this.player.currentExp >= this.player.maxExp) {
+            this.player.currentExp -= this.player.maxExp;
+            this.player.level++;
+            this.player.maxExp = Math.floor(this.player.maxExp * 1.5);
+        }
+
+        if (this.player.level > previousLevel) {
+            this.showLevelUpAnimation(this.player.level);
+        }
+    }
+
+    startJourney() {
+        const pending = this.tasks.filter(t => !t.completed && this.isTaskForToday(t));
+        if (pending.length > 0) {
+            this.showToast(`Jornada iniciada: tienes ${pending.length} misión(es) de hoy.`);
+            this.switchView('dashboard');
+            return;
+        }
+
+        this.openTaskModal();
+        this.showToast('No tienes misiones de hoy. Crea una para empezar.');
+    }
+
+    addAchievement(text) {
+        this.recentAchievements.unshift(`${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} · ${text}`);
+        this.recentAchievements = this.recentAchievements.slice(0, 6);
+        this.renderRecentAchievements();
+    }
+
+    renderRecentAchievements() {
+        const list = document.getElementById('recentAchievements');
+        if (!list) return;
+
+        if (this.recentAchievements.length === 0) {
+            list.innerHTML = '<li>Aún no hay logros. Completa tu primera misión de hoy.</li>';
+            return;
+        }
+
+        list.innerHTML = this.recentAchievements.map(item => `<li>${item}</li>`).join('');
+    }
+
+    showToast(message) {
+        const toast = document.getElementById('toast');
+        if (!toast) return;
+
+        toast.textContent = message;
+        toast.classList.add('active');
+
+        clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => {
+            toast.classList.remove('active');
+        }, 2400);
+    }
+
+    showLevelUpAnimation(level) {
+        const fx = document.getElementById('levelUpFx');
+        const text = document.getElementById('levelUpText');
+        if (!fx || !text) return;
+
+        text.textContent = `Ahora eres nivel ${level}`;
+        fx.classList.add('active');
+
+        setTimeout(() => {
+            fx.classList.remove('active');
+        }, this.uiSettings.reducedMotion ? 800 : 1700);
+    }
+
+    showLootRewardAnimation(rarity) {
+        if (this.uiSettings.reducedMotion) return;
+
+        const machine = document.getElementById('lootMachine');
+        if (!machine) return;
+
+        machine.classList.remove('loot-win-common', 'loot-win-rare', 'loot-win-epic');
+        machine.classList.add(`loot-win-${rarity}`);
+
+        setTimeout(() => {
+            machine.classList.remove('loot-win-common', 'loot-win-rare', 'loot-win-epic');
+        }, 1400);
+    }
+
     saveToLocalStorage() {
         localStorage.setItem('tareasrpg_player', JSON.stringify(this.player));
         localStorage.setItem('tareasrpg_tasks', JSON.stringify(this.tasks));
         localStorage.setItem('tareasrpg_streaks', JSON.stringify(this.taskStreaks));
+        localStorage.setItem('tareasrpg_app_state', JSON.stringify(this.appState));
+        localStorage.setItem('tareasrpg_ui_settings', JSON.stringify(this.uiSettings));
+        localStorage.setItem('tareasrpg_achievements', JSON.stringify(this.recentAchievements));
     }
     
     loadFromLocalStorage() {
         const savedPlayer = localStorage.getItem('tareasrpg_player');
         const savedTasks = localStorage.getItem('tareasrpg_tasks');
         const savedStreaks = localStorage.getItem('tareasrpg_streaks');
+        const savedAppState = localStorage.getItem('tareasrpg_app_state');
+        const savedUISettings = localStorage.getItem('tareasrpg_ui_settings');
+        const savedAchievements = localStorage.getItem('tareasrpg_achievements');
         
         if (savedPlayer) {
             this.player = JSON.parse(savedPlayer);
@@ -997,6 +1435,21 @@ class TareasRPG {
         
         if (savedStreaks) {
             this.taskStreaks = JSON.parse(savedStreaks);
+        }
+
+        if (savedAppState) {
+            this.appState = JSON.parse(savedAppState);
+        }
+
+        if (savedUISettings) {
+            this.uiSettings = { ...this.uiSettings, ...JSON.parse(savedUISettings) };
+            document.body.classList.toggle('reduced-motion', this.uiSettings.reducedMotion);
+            const toggle = document.getElementById('reducedMotionToggle');
+            if (toggle) toggle.checked = this.uiSettings.reducedMotion;
+        }
+
+        if (savedAchievements) {
+            this.recentAchievements = JSON.parse(savedAchievements);
         }
         
         // Renderizar horario después de cargar los datos
