@@ -658,6 +658,12 @@ class TareasRPG {
         this.renderTasks();
         this.renderSchedule();
         this.renderCalendar();
+        if (confirm('¿Estás seguro de que quieres eliminar esta misión?')) {
+            const normalizedId = String(taskId);
+            this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+            this.saveToLocalStorage();
+            this.renderTasks();
+        }
     }
     
     renderSchedule() {
