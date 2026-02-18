@@ -32,6 +32,7 @@
             </div>
             <nav class="main-nav">
                 <button class="nav-btn active" data-view="dashboard">Tablero</button>
+                <button class="nav-btn" data-view="schedule">Horario</button>
                 <button class="nav-btn" data-view="calendar">Calendario</button>
                 <button class="nav-btn" data-view="inventory">Inventario</button>
                 <button class="nav-btn" data-view="market">Mercado</button>
@@ -73,13 +74,6 @@
                     </article>
                 </div>
                 
-                <div class="week-schedule">
-                    <h2>Horario Semanal</h2>
-                    <div class="schedule-grid" id="scheduleGrid">
-                        <!-- Se generará dinámicamente -->
-                    </div>
-                </div>
-
                 <div class="tasks-container">
                     <div class="tasks-section">
                         <h3>Misiones Pendientes</h3>
@@ -93,6 +87,16 @@
                         <div class="task-list" id="completedTasks">
                             <!-- Las tareas completadas se mostrarán aquí -->
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista Horario -->
+            <section id="schedule" class="view">
+                <h1>Horario Semanal</h1>
+                <div class="week-schedule">
+                    <div class="schedule-grid" id="scheduleGrid">
+                        <!-- Se generará dinámicamente -->
                     </div>
                 </div>
             </section>

@@ -18,6 +18,10 @@ class TareasRPG {
         this.taskStreaks = {}; // Guardar rachas de cada tarea
         this.currentView = 'dashboard';
         this.currentDate = new Date();
+        this.appState = {
+            lastVisitDate: null,
+            lastView: 'dashboard'
+        };
         
         this.items = [
             { id: 1, name: 'Espada de Hierro', type: 'weapon', rarity: 'common', price: 50, stats: { attack: 5 }, icon: '⚔️' },
@@ -36,6 +40,7 @@ class TareasRPG {
     init() {
         this.loadFromLocalStorage();
         this.setupEventListeners();
+        this.initializeStartupView();
         this.renderSchedule();
         this.renderTasks();
         this.renderCalendar();
@@ -125,6 +130,22 @@ class TareasRPG {
         document.getElementById(viewName).classList.add('active');
         document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
         this.currentView = viewName;
+        this.appState.lastView = viewName;
+        this.appState.lastVisitDate = this.formatDateInput(new Date());
+        this.saveToLocalStorage();
+    }
+
+    initializeStartupView() {
+        const today = this.formatDateInput(new Date());
+        const isFirstVisit = !this.appState.lastVisitDate;
+        const isNewDay = this.appState.lastVisitDate !== today;
+
+        if (isFirstVisit || isNewDay) {
+            this.switchView('dashboard');
+        } else {
+            const viewToShow = this.appState.lastView || 'dashboard';
+            this.switchView(viewToShow);
+        }
     }
 
     parseDateInput(dateString) {
@@ -518,7 +539,7 @@ class TareasRPG {
     createTaskElement(task) {
         const taskEl = document.createElement('div');
         const canComplete = this.canCompleteTask(task);
-        taskEl.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''} ${!canComplete && !task.completed ? 'disabled' : ''}`;
+        taskEl.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''}`;
         
         // Calcular bonificación de racha
         const taskKey = `${task.title}_${task.repeat}`;
@@ -661,6 +682,8 @@ class TareasRPG {
     }
     
     getTasksForTimeSlot(hour, dayOfWeek) {
+        const scheduleDayToJs = (scheduleDay) => (scheduleDay === 6 ? 0 : scheduleDay + 1);
+
         return this.tasks.filter(task => {
             if (task.completed) return false;
             
@@ -672,10 +695,9 @@ class TareasRPG {
                     // Tarea única: verificar si coincide con la fecha y hora
                     if (!task.date) return false;
                     const taskDate = this.parseDateInput(task.date);
+                    if (!taskDate) return false;
                     const taskDayOfWeek = taskDate.getDay(); // 0 = Domingo, 1 = Lunes, etc.
-                    // Convertir nuestro formato (0=Lunes) al formato JavaScript (0=Domingo)
-                    const scheduleDayOfWeek = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    return taskDayOfWeek === scheduleDayOfWeek;
+                    return taskDayOfWeek === scheduleDayToJs(dayOfWeek);
                     
                 case 'daily':
                     // Tarea diaria: siempre mostrar si la hora coincide
@@ -683,9 +705,7 @@ class TareasRPG {
                     
                 case 'weekly':
                     // Tarea semanal: verificar día de la semana
-                    // Convertir nuestro formato (0=Lunes) al formato JavaScript (0=Domingo)
-                    const scheduleDayForWeekly = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    return task.dayOfWeek === scheduleDayForWeekly;
+                    return task.dayOfWeek === scheduleDayToJs(dayOfWeek);
                     
                 case 'monthly':
                     // Tarea mensual: verificar día del mes
@@ -695,13 +715,14 @@ class TareasRPG {
                     const now = new Date();
                     const currentMonth = now.getMonth();
                     const currentYear = now.getFullYear();
-                    
-                    // Crear fecha para el día del mes actual en el día de la semana correspondiente
+
+                    // Crear fecha para el día del mes actual y validar que exista
                     const testDate = new Date(currentYear, currentMonth, monthlyDay);
-                    const testDayOfWeek = testDate.getDay();
-                    const scheduleDayForMonthly = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    
-                    return testDayOfWeek === scheduleDayForMonthly;
+                    if (testDate.getMonth() !== currentMonth || testDate.getDate() !== monthlyDay) {
+                        return false;
+                    }
+
+                    return testDate.getDay() === scheduleDayToJs(dayOfWeek);
                     
                 default:
                     return false;
@@ -980,12 +1001,14 @@ class TareasRPG {
         localStorage.setItem('tareasrpg_player', JSON.stringify(this.player));
         localStorage.setItem('tareasrpg_tasks', JSON.stringify(this.tasks));
         localStorage.setItem('tareasrpg_streaks', JSON.stringify(this.taskStreaks));
+        localStorage.setItem('tareasrpg_app_state', JSON.stringify(this.appState));
     }
     
     loadFromLocalStorage() {
         const savedPlayer = localStorage.getItem('tareasrpg_player');
         const savedTasks = localStorage.getItem('tareasrpg_tasks');
         const savedStreaks = localStorage.getItem('tareasrpg_streaks');
+        const savedAppState = localStorage.getItem('tareasrpg_app_state');
         
         if (savedPlayer) {
             this.player = JSON.parse(savedPlayer);
@@ -997,6 +1020,10 @@ class TareasRPG {
         
         if (savedStreaks) {
             this.taskStreaks = JSON.parse(savedStreaks);
+        }
+
+        if (savedAppState) {
+            this.appState = JSON.parse(savedAppState);
         }
         
         // Renderizar horario después de cargar los datos
