@@ -15,6 +15,7 @@ class TareasRPG {
         };
         
         this.tasks = [];
+        this.taskStreaks = {}; // Guardar rachas de cada tarea
         this.currentView = 'dashboard';
         this.currentDate = new Date();
         
@@ -60,6 +61,15 @@ class TareasRPG {
         document.getElementById('taskForm').addEventListener('submit', (e) => {
             e.preventDefault();
             this.saveTask();
+        });
+        
+        // Auto-calcular recompensas
+        document.getElementById('taskPriority').addEventListener('change', () => {
+            this.calculateRewards();
+        });
+        
+        document.getElementById('taskRepeat').addEventListener('change', () => {
+            this.calculateRewards();
         });
         
         // Modal close
@@ -141,16 +151,48 @@ class TareasRPG {
         modal.style.display = 'block';
     }
     
+    calculateRewards() {
+        const priority = document.getElementById('taskPriority').value;
+        const repeat = document.getElementById('taskRepeat').value;
+        
+        // Valores base según prioridad
+        const baseRewards = {
+            low: { exp: 10, coins: 5 },
+            medium: { exp: 20, coins: 10 },
+            high: { exp: 30, coins: 15 }
+        };
+        
+        // Multiplicador según frecuencia
+        const repeatMultiplier = {
+            none: 1,
+            daily: 0.5, // Las tareas diarias dan menos base pero más por racha
+            weekly: 1.2,
+            monthly: 2
+        };
+        
+        const base = baseRewards[priority];
+        const multiplier = repeatMultiplier[repeat];
+        
+        const exp = Math.round(base.exp * multiplier);
+        const coins = Math.round(base.coins * multiplier);
+        
+        document.getElementById('autoExp').textContent = exp;
+        document.getElementById('autoCoins').textContent = coins;
+        
+        return { exp, coins };
+    }
+    
     saveTask() {
         const form = document.getElementById('taskForm');
         const taskId = form.dataset.taskId;
+        const rewards = this.calculateRewards();
         
         const taskData = {
             title: document.getElementById('taskTitle').value,
             description: document.getElementById('taskDescription').value,
             priority: document.getElementById('taskPriority').value,
-            exp: parseInt(document.getElementById('taskExp').value),
-            coins: parseInt(document.getElementById('taskCoins').value),
+            exp: rewards.exp,
+            coins: rewards.coins,
             repeat: document.getElementById('taskRepeat').value,
             date: document.getElementById('taskDate').value,
             time: document.getElementById('taskTime').value,
@@ -175,7 +217,16 @@ class TareasRPG {
         const task = this.tasks.find(t => t.id === taskId);
         if (!task.completed) {
             task.completed = true;
-            this.showRewardModal(task.exp, task.coins);
+            
+            // Calcular recompensas con bonificación de racha
+            const streakBonus = this.calculateStreakBonus(task);
+            const totalExp = task.exp + streakBonus.exp;
+            const totalCoins = task.coins + streakBonus.coins;
+            
+            this.showRewardModal(totalExp, totalCoins, streakBonus.streak);
+            
+            // Actualizar racha
+            this.updateStreak(task);
             
             // Manejar repetición
             if (task.repeat !== 'none') {
@@ -185,6 +236,51 @@ class TareasRPG {
         
         this.saveToLocalStorage();
         this.renderTasks();
+    }
+    
+    calculateStreakBonus(task) {
+        const taskKey = `${task.title}_${task.repeat}`;
+        const streak = this.taskStreaks[taskKey] || 0;
+        
+        // Bonificación: 10% extra por cada día de racha, máximo 200%
+        const bonusMultiplier = Math.min(1 + (streak * 0.1), 3);
+        
+        const bonusExp = Math.round(task.exp * (bonusMultiplier - 1));
+        const bonusCoins = Math.round(task.coins * (bonusMultiplier - 1));
+        
+        return {
+            streak,
+            exp: bonusExp,
+            coins: bonusCoins,
+            multiplier: bonusMultiplier
+        };
+    }
+    
+    updateStreak(task) {
+        if (task.repeat === 'none') return;
+        
+        const taskKey = `${task.title}_${task.repeat}`;
+        const today = new Date().toDateString();
+        const lastCompleted = this.taskStreaks[`${taskKey}_last`] || '';
+        
+        // Si es la primera vez o completó ayer, aumentar racha
+        if (!this.taskStreaks[taskKey]) {
+            this.taskStreaks[taskKey] = 1;
+        } else {
+            const lastDate = new Date(lastCompleted);
+            const todayDate = new Date(today);
+            const diffDays = Math.floor((todayDate - lastDate) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 1) {
+                this.taskStreaks[taskKey]++;
+            } else if (diffDays > 1) {
+                // Rompió la racha
+                this.taskStreaks[taskKey] = 1;
+            }
+            // Si diffDays === 0, es el mismo día, no cambiar
+        }
+        
+        this.taskStreaks[`${taskKey}_last`] = today;
     }
     
     createRecurringTask(originalTask) {
@@ -212,10 +308,33 @@ class TareasRPG {
         this.tasks.push(newTask);
     }
     
-    showRewardModal(exp, coins) {
+    showRewardModal(exp, coins, streak = 0) {
         document.getElementById('rewardExp').textContent = exp;
         document.getElementById('rewardCoins').textContent = coins;
-        document.getElementById('rewardModal').style.display = 'block';
+        
+        const modal = document.getElementById('rewardModal');
+        const rewardDisplay = modal.querySelector('.reward-display');
+        
+        if (streak > 0) {
+            const streakInfo = document.createElement('div');
+            streakInfo.className = 'streak-bonus';
+            streakInfo.innerHTML = `
+                <div class="reward-item">
+                    <span class="reward-icon">🔥</span>
+                    <span class="reward-text">Racha de ${streak} días</span>
+                </div>
+            `;
+            
+            // Remover streak anterior si existe
+            const existingStreak = rewardDisplay.querySelector('.streak-bonus');
+            if (existingStreak) {
+                existingStreak.remove();
+            }
+            
+            rewardDisplay.appendChild(streakInfo);
+        }
+        
+        modal.style.display = 'block';
         
         this.pendingReward = { exp, coins };
     }
@@ -262,6 +381,11 @@ class TareasRPG {
         const taskEl = document.createElement('div');
         taskEl.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''}`;
         
+        // Calcular bonificación de racha
+        const taskKey = `${task.title}_${task.repeat}`;
+        const streak = this.taskStreaks[taskKey] || 0;
+        const streakBonus = streak > 0 ? this.calculateStreakBonus(task) : null;
+        
         taskEl.innerHTML = `
             <h4>${task.title}</h4>
             <p>${task.description || 'Sin descripción'}</p>
@@ -270,7 +394,9 @@ class TareasRPG {
                 <span>💰 ${task.coins} monedas</span>
                 ${task.date ? `<span>📅 ${task.date}</span>` : ''}
                 ${task.time ? `<span>🕐 ${task.time}</span>` : ''}
+                ${streak > 0 ? `<span class="streak-indicator">🔥 ${streak} días</span>` : ''}
             </div>
+            ${streakBonus ? `<div class="bonus-info">+${streakBonus.exp} EXP, +${streakBonus.coins} 💰 por racha</div>` : ''}
             <div class="task-actions">
                 ${!task.completed ? `<button class="btn-complete" onclick="game.completeTask(${task.id})">Completar</button>` : ''}
                 <button class="btn-edit" onclick="game.openTaskModal(${task.id})">Editar</button>
@@ -546,11 +672,13 @@ class TareasRPG {
     saveToLocalStorage() {
         localStorage.setItem('tareasrpg_player', JSON.stringify(this.player));
         localStorage.setItem('tareasrpg_tasks', JSON.stringify(this.tasks));
+        localStorage.setItem('tareasrpg_streaks', JSON.stringify(this.taskStreaks));
     }
     
     loadFromLocalStorage() {
         const savedPlayer = localStorage.getItem('tareasrpg_player');
         const savedTasks = localStorage.getItem('tareasrpg_tasks');
+        const savedStreaks = localStorage.getItem('tareasrpg_streaks');
         
         if (savedPlayer) {
             this.player = JSON.parse(savedPlayer);
@@ -558,6 +686,10 @@ class TareasRPG {
         
         if (savedTasks) {
             this.tasks = JSON.parse(savedTasks);
+        }
+        
+        if (savedStreaks) {
+            this.taskStreaks = JSON.parse(savedStreaks);
         }
     }
 }

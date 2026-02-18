@@ -265,13 +265,33 @@ h1 {
 
 .modal-content {
     background: var(--surface-color);
-    margin: 10% auto;
+    margin: 5% auto;
     padding: 30px;
     border: 2px solid var(--border-color);
     border-radius: 15px;
     width: 90%;
     max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
     position: relative;
+}
+
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: var(--bg-color);
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary-color);
 }
 
 .close {
@@ -303,6 +323,49 @@ h1 {
     border-radius: 5px;
     color: var(--text-color);
     font-family: inherit;
+}
+
+.rewards-preview {
+    background: var(--bg-color);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 10px;
+}
+
+.reward-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+
+.reward-info:last-child {
+    margin-bottom: 0;
+}
+
+.reward-info span:first-child {
+    color: var(--text-secondary);
+}
+
+.reward-info span:last-child {
+    font-weight: bold;
+    color: var(--accent-color);
+    font-size: 18px;
+}
+
+.discipline-info {
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(255, 215, 0, 0.1);
+    border-left: 3px solid var(--accent-color);
+    border-radius: 3px;
+}
+
+.discipline-info small {
+    color: var(--accent-color);
+    font-style: italic;
 }
 
 .calendar-container {
@@ -515,4 +578,54 @@ h1 {
     .equipment-slots {
         grid-template-columns: 1fr;
     }
+}
+
+/* Estilos para rachas y bonificaciones */
+.task-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.task-actions button {
+    padding: 5px 10px;
+    border: 1px solid var(--border-color);
+    background: var(--primary-color);
+    color: var(--text-color);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+.task-actions button:hover {
+    background: var(--secondary-color);
+}
+
+.streak-indicator {
+    background: linear-gradient(135deg, #FF6B35, #F7931E);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+.bonus-info {
+    background: rgba(255, 215, 0, 0.1);
+    border-left: 3px solid var(--accent-color);
+    padding: 5px 10px;
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--accent-color);
+    font-weight: bold;
+    border-radius: 3px;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
 }
