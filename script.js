@@ -18,6 +18,11 @@ class TareasRPG {
         this.taskStreaks = {}; // Guardar rachas de cada tarea
         this.currentView = 'dashboard';
         this.currentDate = new Date();
+        this.appState = {
+            lastVisitDate: null,
+            lastView: 'dashboard'
+        };
+        this.isLootSpinning = false;
         
         this.items = [
             { id: 1, name: 'Espada de Hierro', type: 'weapon', rarity: 'common', price: 50, stats: { attack: 5 }, icon: '⚔️' },
@@ -36,6 +41,7 @@ class TareasRPG {
     init() {
         this.loadFromLocalStorage();
         this.setupEventListeners();
+        this.initializeStartupView();
         this.renderSchedule();
         this.renderTasks();
         this.renderCalendar();
@@ -125,6 +131,22 @@ class TareasRPG {
         document.getElementById(viewName).classList.add('active');
         document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
         this.currentView = viewName;
+        this.appState.lastView = viewName;
+        this.appState.lastVisitDate = this.formatDateInput(new Date());
+        this.saveToLocalStorage();
+    }
+
+    initializeStartupView() {
+        const today = this.formatDateInput(new Date());
+        const isFirstVisit = !this.appState.lastVisitDate;
+        const isNewDay = this.appState.lastVisitDate !== today;
+
+        if (isFirstVisit || isNewDay) {
+            this.switchView('dashboard');
+        } else {
+            const viewToShow = this.appState.lastView || 'dashboard';
+            this.switchView(viewToShow);
+        }
     }
 
     parseDateInput(dateString) {
@@ -498,19 +520,45 @@ class TareasRPG {
         const pendingContainer = document.getElementById('pendingTasks');
         const completedContainer = document.getElementById('completedTasks');
         
-        const pendingTasks = this.tasks.filter(t => !t.completed);
-        const completedTasks = this.tasks.filter(t => t.completed);
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        const toMinutes = (time) => {
+            if (!time) return 24 * 60;
+            const [hours, minutes] = time.split(':').map(Number);
+            return (hours * 60) + minutes;
+        };
+
+        const pendingTasks = this.tasks
+            .filter(t => !t.completed)
+            .sort((a, b) => {
+                const byPriority = priorityOrder[a.priority] - priorityOrder[b.priority];
+                if (byPriority !== 0) return byPriority;
+                const byTime = toMinutes(a.time) - toMinutes(b.time);
+                if (byTime !== 0) return byTime;
+                return a.title.localeCompare(b.title, 'es');
+            });
+
+        const completedTasks = this.tasks
+            .filter(t => t.completed)
+            .sort((a, b) => b.id - a.id);
         
         pendingContainer.innerHTML = '';
         completedContainer.innerHTML = '';
         
-        pendingTasks.forEach(task => {
-            pendingContainer.appendChild(this.createTaskElement(task));
-        });
+        if (pendingTasks.length === 0) {
+            pendingContainer.innerHTML = '<div class="task-empty">No tienes misiones pendientes. ¡Gran trabajo! ⚔️</div>';
+        } else {
+            pendingTasks.forEach(task => {
+                pendingContainer.appendChild(this.createTaskElement(task));
+            });
+        }
         
-        completedTasks.forEach(task => {
-            completedContainer.appendChild(this.createTaskElement(task));
-        });
+        if (completedTasks.length === 0) {
+            completedContainer.innerHTML = '<div class="task-empty">Aún no hay misiones completadas hoy.</div>';
+        } else {
+            completedTasks.forEach(task => {
+                completedContainer.appendChild(this.createTaskElement(task));
+            });
+        }
 
         this.renderDashboardSummary();
     }
@@ -518,7 +566,7 @@ class TareasRPG {
     createTaskElement(task) {
         const taskEl = document.createElement('div');
         const canComplete = this.canCompleteTask(task);
-        taskEl.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''} ${!canComplete && !task.completed ? 'disabled' : ''}`;
+        taskEl.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''}`;
         
         // Calcular bonificación de racha
         const taskKey = `${task.title}_${task.repeat}`;
@@ -553,25 +601,50 @@ class TareasRPG {
             <p>${task.description || 'Sin descripción'}</p>
             <div class="task-meta">
                 <span>⭐ ${task.exp} EXP</span>
-                <span>� ${task.coins} monedas</span>
+                <span>💰 ${task.coins} monedas</span>
                 ${timeInfo}
                 ${streak > 0 ? `<span class="streak-indicator">🔥 ${streak} días</span>` : ''}
             </div>
             ${streakBonus ? `<div class="bonus-info">+${streakBonus.exp} EXP, +${streakBonus.coins} 💰 por racha</div>` : ''}
             ${!canComplete && !task.completed ? '<div class="time-warning">⏰ Aún no es tiempo de completar esta misión</div>' : ''}
             <div class="task-actions">
-                ${!task.completed ? `<button class="btn-complete" onclick="game.completeTask(${task.id})" ${!canComplete ? 'disabled' : ''}>Completar</button>` : ''}
-                <button class="btn-edit" onclick="game.openTaskModal(${task.id})">Editar</button>
-                <button class="btn-delete" onclick="game.deleteTask(${task.id})">Eliminar</button>
+                ${!task.completed ? `<button class="btn-complete" ${!canComplete ? 'disabled' : ''}>Completar</button>` : ''}
+                <button class="btn-edit" type="button">Editar</button>
+                <button class="btn-delete" type="button">Eliminar</button>
             </div>
         `;
+
+        const completeBtn = taskEl.querySelector('.btn-complete');
+        if (completeBtn) {
+            completeBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.completeTask(task.id);
+            });
+        }
+
+        const editBtn = taskEl.querySelector('.btn-edit');
+        if (editBtn) {
+            editBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.openTaskModal(task.id);
+            });
+        }
+
+        const deleteBtn = taskEl.querySelector('.btn-delete');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.deleteTask(task.id);
+            });
+        }
         
         return taskEl;
     }
     
     deleteTask(taskId) {
         if (confirm('¿Estás seguro de que quieres eliminar esta misión?')) {
-            this.tasks = this.tasks.filter(t => t.id !== taskId);
+            const normalizedId = String(taskId);
+            this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
             this.saveToLocalStorage();
             this.renderTasks();
         }
@@ -661,6 +734,8 @@ class TareasRPG {
     }
     
     getTasksForTimeSlot(hour, dayOfWeek) {
+        const scheduleDayToJs = (scheduleDay) => (scheduleDay === 6 ? 0 : scheduleDay + 1);
+
         return this.tasks.filter(task => {
             if (task.completed) return false;
             
@@ -672,10 +747,9 @@ class TareasRPG {
                     // Tarea única: verificar si coincide con la fecha y hora
                     if (!task.date) return false;
                     const taskDate = this.parseDateInput(task.date);
+                    if (!taskDate) return false;
                     const taskDayOfWeek = taskDate.getDay(); // 0 = Domingo, 1 = Lunes, etc.
-                    // Convertir nuestro formato (0=Lunes) al formato JavaScript (0=Domingo)
-                    const scheduleDayOfWeek = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    return taskDayOfWeek === scheduleDayOfWeek;
+                    return taskDayOfWeek === scheduleDayToJs(dayOfWeek);
                     
                 case 'daily':
                     // Tarea diaria: siempre mostrar si la hora coincide
@@ -683,9 +757,7 @@ class TareasRPG {
                     
                 case 'weekly':
                     // Tarea semanal: verificar día de la semana
-                    // Convertir nuestro formato (0=Lunes) al formato JavaScript (0=Domingo)
-                    const scheduleDayForWeekly = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    return task.dayOfWeek === scheduleDayForWeekly;
+                    return task.dayOfWeek === scheduleDayToJs(dayOfWeek);
                     
                 case 'monthly':
                     // Tarea mensual: verificar día del mes
@@ -695,13 +767,14 @@ class TareasRPG {
                     const now = new Date();
                     const currentMonth = now.getMonth();
                     const currentYear = now.getFullYear();
-                    
-                    // Crear fecha para el día del mes actual en el día de la semana correspondiente
+
+                    // Crear fecha para el día del mes actual y validar que exista
                     const testDate = new Date(currentYear, currentMonth, monthlyDay);
-                    const testDayOfWeek = testDate.getDay();
-                    const scheduleDayForMonthly = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
-                    
-                    return testDayOfWeek === scheduleDayForMonthly;
+                    if (testDate.getMonth() !== currentMonth || testDate.getDate() !== monthlyDay) {
+                        return false;
+                    }
+
+                    return testDate.getDay() === scheduleDayToJs(dayOfWeek);
                     
                 default:
                     return false;
@@ -939,32 +1012,123 @@ class TareasRPG {
         this.saveToLocalStorage();
     }
     
-    openLootBox(rarity, price) {
-        if (this.player.coins >= price) {
-            this.player.coins -= price;
-            this.updatePlayerStats();
-            
-            const items = this.getRandomLoot(rarity);
-            const item = items[Math.floor(Math.random() * items.length)];
-            
-            this.player.inventory.push({...item});
-            this.renderInventory();
-            this.saveToLocalStorage();
-            
-            alert(`¡Has obtenido: ${item.name}!`);
-        } else {
-            alert('No tienes suficientes monedas');
+    async openLootBox(rarity, price) {
+        if (this.isLootSpinning) {
+            return;
         }
+
+        if (this.player.coins < price) {
+            alert('No tienes suficientes monedas');
+            return;
+        }
+
+        this.isLootSpinning = true;
+        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = true);
+
+        this.player.coins -= price;
+        this.updatePlayerStats();
+
+        const rarityPool = this.getRandomLoot(rarity);
+        const wonItem = rarityPool[Math.floor(Math.random() * rarityPool.length)];
+
+        await this.animateLootMachine(rarity, wonItem);
+
+        this.player.inventory.push({ ...wonItem });
+        this.renderInventory();
+        this.saveToLocalStorage();
+
+        this.isLootSpinning = false;
+        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = false);
     }
-    
+
     getRandomLoot(rarity) {
+        const common = this.items.filter(i => i.rarity === 'common');
+        const rare = this.items.filter(i => i.rarity === 'rare');
+        const epic = this.items.filter(i => i.rarity === 'epic');
+
         const lootTable = {
-            common: this.items.filter(i => i.rarity === 'common'),
-            rare: this.items.filter(i => i.rarity === 'rare'),
-            epic: this.items.filter(i => i.rarity === 'epic')
+            common,
+            rare: [...common, ...rare, ...rare],
+            epic: [...common, ...rare, ...epic, ...epic]
         };
-        
-        return lootTable[rarity] || lootTable.common;
+
+        return lootTable[rarity] || common;
+    }
+
+    async animateLootMachine(rarity, wonItem) {
+        const reelTrack = document.getElementById('lootReelTrack');
+        const resultEl = document.getElementById('lootResult');
+
+        if (!reelTrack || !resultEl) {
+            alert(`¡Has obtenido: ${wonItem.name}!`);
+            return;
+        }
+
+        const previewPool = [...this.items, ...this.items.filter(i => i.rarity !== 'common')];
+        const cardWidth = 120;
+        const totalCards = 28;
+
+        const reelItems = [];
+        for (let i = 0; i < totalCards - 1; i++) {
+            const randomItem = previewPool[Math.floor(Math.random() * previewPool.length)];
+            reelItems.push(randomItem);
+        }
+        reelItems.push(wonItem);
+
+        reelTrack.innerHTML = reelItems.map(item => `
+            <article class="reel-item rarity-${item.rarity}">
+                <div class="reel-icon">${item.icon}</div>
+                <div class="reel-name">${item.name}</div>
+            </article>
+        `).join('');
+
+        reelTrack.style.transition = 'none';
+        reelTrack.style.transform = 'translateX(0px)';
+        resultEl.textContent = 'Girando ruleta arcana...';
+
+        void reelTrack.offsetHeight;
+
+        const offsetToLast = (totalCards - 3) * cardWidth;
+        reelTrack.style.transition = 'transform 3.4s cubic-bezier(0.12, 0.8, 0.15, 1)';
+        reelTrack.style.transform = `translateX(-${offsetToLast}px)`;
+
+        await new Promise(resolve => setTimeout(resolve, 3450));
+
+        resultEl.innerHTML = `✨ Premio obtenido: <strong style="color:${this.getRarityColor(wonItem.rarity)}">${wonItem.icon} ${wonItem.name}</strong>`;
+        this.createLootParticles(rarity);
+    }
+
+    createLootParticles(rarity) {
+        const particlesContainer = document.getElementById('lootParticles');
+        if (!particlesContainer) return;
+
+        const particleByRarity = { common: 18, rare: 36, epic: 64 };
+        const colorByRarity = {
+            common: ['#8ed081', '#b8e994'],
+            rare: ['#f7b731', '#f8c291', '#fa983a'],
+            epic: ['#f6e58d', '#ffbe76', '#e056fd', '#7ed6df']
+        };
+
+        particlesContainer.innerHTML = '';
+        const total = particleByRarity[rarity] || 20;
+        const colors = colorByRarity[rarity] || ['#ffffff'];
+
+        for (let i = 0; i < total; i++) {
+            const particle = document.createElement('span');
+            particle.className = 'loot-particle';
+            particle.style.left = `${Math.random() * 100}%`;
+            particle.style.top = `${60 + Math.random() * 30}%`;
+            particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.animationDelay = `${Math.random() * 0.25}s`;
+            particle.style.animationDuration = `${0.9 + Math.random() * 0.8}s`;
+            particle.style.setProperty('--dx', `${-90 + Math.random() * 180}px`);
+            particle.style.setProperty('--dy', `${-120 - Math.random() * 120}px`);
+            particlesContainer.appendChild(particle);
+        }
+
+        setTimeout(() => {
+            particlesContainer.innerHTML = '';
+        }, 2000);
     }
     
     getRarityColor(rarity) {
@@ -980,12 +1144,14 @@ class TareasRPG {
         localStorage.setItem('tareasrpg_player', JSON.stringify(this.player));
         localStorage.setItem('tareasrpg_tasks', JSON.stringify(this.tasks));
         localStorage.setItem('tareasrpg_streaks', JSON.stringify(this.taskStreaks));
+        localStorage.setItem('tareasrpg_app_state', JSON.stringify(this.appState));
     }
     
     loadFromLocalStorage() {
         const savedPlayer = localStorage.getItem('tareasrpg_player');
         const savedTasks = localStorage.getItem('tareasrpg_tasks');
         const savedStreaks = localStorage.getItem('tareasrpg_streaks');
+        const savedAppState = localStorage.getItem('tareasrpg_app_state');
         
         if (savedPlayer) {
             this.player = JSON.parse(savedPlayer);
@@ -997,6 +1163,10 @@ class TareasRPG {
         
         if (savedStreaks) {
             this.taskStreaks = JSON.parse(savedStreaks);
+        }
+
+        if (savedAppState) {
+            this.appState = JSON.parse(savedAppState);
         }
         
         // Renderizar horario después de cargar los datos
