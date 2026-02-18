@@ -40,6 +40,7 @@ class TareasRPG {
         this.renderTasks();
         this.renderCalendar();
         this.updatePlayerStats();
+        this.renderDashboardSummary();
         this.renderInventory();
         this.renderMarket();
     }
@@ -510,6 +511,8 @@ class TareasRPG {
         completedTasks.forEach(task => {
             completedContainer.appendChild(this.createTaskElement(task));
         });
+
+        this.renderDashboardSummary();
     }
     
     createTaskElement(task) {
@@ -766,6 +769,53 @@ class TareasRPG {
         return months[month];
     }
     
+    isTaskForToday(task) {
+        const now = new Date();
+        const todayDate = this.formatDateInput(now);
+        const todayDayOfWeek = now.getDay();
+
+        switch (task.repeat) {
+            case 'none':
+                return task.date === todayDate;
+            case 'daily':
+                return true;
+            case 'weekly':
+                return task.dayOfWeek === todayDayOfWeek;
+            case 'monthly': {
+                if (!task.date) return false;
+                const monthlyDate = this.parseDateInput(task.date);
+                return monthlyDate ? monthlyDate.getDate() === now.getDate() : false;
+            }
+            default:
+                return false;
+        }
+    }
+
+    renderDashboardSummary() {
+        const todayTasks = this.tasks.filter(task => !task.completed && this.isTaskForToday(task));
+        const availableNow = todayTasks.filter(task => this.canCompleteTask(task));
+        const pendingCount = this.tasks.filter(task => !task.completed).length;
+        const completedCount = this.tasks.filter(task => task.completed).length;
+        const expPercent = Math.round((this.player.currentExp / this.player.maxExp) * 100);
+
+        document.getElementById('summaryTodayCount').textContent = todayTasks.length;
+        document.getElementById('summaryReadyCount').textContent = `${availableNow.length} disponibles ahora`;
+        document.getElementById('summaryPendingCount').textContent = pendingCount;
+        document.getElementById('summaryCompletedCount').textContent = `${completedCount} completadas`;
+        document.getElementById('summaryCoinsCount').textContent = `${this.player.coins} monedas`;
+        document.getElementById('summaryInventoryCount').textContent = `${this.player.inventory.length} objetos en inventario`;
+        document.getElementById('summaryLevel').textContent = this.player.level;
+        document.getElementById('summaryExpPercent').textContent = `${expPercent}% hacia el siguiente nivel`;
+
+        const dateLabel = new Date().toLocaleDateString('es-ES', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long'
+        });
+
+        document.getElementById('dashboardDateLabel').textContent = `Hoy es ${dateLabel}. Enfoque total.`;
+    }
+
     updatePlayerStats() {
         document.getElementById('playerName').textContent = this.player.name;
         document.getElementById('playerLevel').textContent = this.player.level;
@@ -773,6 +823,7 @@ class TareasRPG {
         document.getElementById('maxExp').textContent = this.player.maxExp;
         document.getElementById('playerCoins').textContent = this.player.coins;
         document.getElementById('expFill').style.width = `${(this.player.currentExp / this.player.maxExp) * 100}%`;
+        this.renderDashboardSummary();
     }
     
     renderInventory() {
