@@ -37,6 +37,7 @@
                 <button class="nav-btn" data-view="inventory">Inventario</button>
                 <button class="nav-btn" data-view="market">Mercado</button>
                 <button class="nav-btn" data-view="loot">Cajas de Botín</button>
+                <button class="nav-btn" id="settingsBtn" type="button">⚙️ Ajustes</button>
             </nav>
         </header>
 
@@ -52,6 +53,11 @@
                 </div>
 
                 <div class="executive-summary">
+                    <article class="summary-card mission-hook-card">
+                        <span class="summary-title">Misión de apertura</span>
+                        <strong id="missionHookText">Pulsa para iniciar tu jornada</strong>
+                        <button class="btn-primary" id="startJourneyBtn" type="button">⚔️ Empezar jornada</button>
+                    </article>
                     <article class="summary-card highlight">
                         <span class="summary-title">Misiones de hoy</span>
                         <strong id="summaryTodayCount">0</strong>
@@ -72,6 +78,28 @@
                         <strong>Nivel <span id="summaryLevel">1</span></strong>
                         <small id="summaryExpPercent">0% hacia el siguiente nivel</small>
                     </article>
+                    <article class="summary-card">
+                        <span class="summary-title">Meta semanal</span>
+                        <strong><span id="weeklyProgressCount">0</span>/<span id="weeklyGoalCount">18</span></strong>
+                        <div class="weekly-progress-bar">
+                            <div class="weekly-progress-fill" id="weeklyProgressFill"></div>
+                        </div>
+                        <small id="weeklyProgressLabel">Completa misiones para abrir el cofre semanal.</small>
+                    </article>
+                </div>
+
+                <div class="habit-row">
+                    <div class="habit-card">
+                        <h3>Check-in diario</h3>
+                        <p id="checkinStatus">Reclama tu bonus diario para mantener el hábito.</p>
+                        <button class="btn-primary" id="dailyCheckinBtn" type="button">🎁 Reclamar check-in</button>
+                    </div>
+                    <div class="habit-card">
+                        <h3>Logros recientes</h3>
+                        <ul id="recentAchievements" class="achievements-list">
+                            <li>Aún no hay logros. Completa tu primera misión de hoy.</li>
+                        </ul>
+                    </div>
                 </div>
                 
                 <div class="tasks-container">
@@ -283,6 +311,32 @@
                     </div>
                 </div>
                 <button class="btn-primary" id="claimReward">Reclamar Recompensa</button>
+            </div>
+        </div>
+
+        <div id="settingsModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Ajustes de experiencia</h2>
+                <div class="settings-options">
+                    <label class="settings-toggle">
+                        <input type="checkbox" id="reducedMotionToggle">
+                        <span>Reducir animaciones intensas</span>
+                    </label>
+                    <small>Ideal para una experiencia más ligera sin perder funcionalidad.</small>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+        <div id="undoDeleteToast" class="undo-toast" role="status" aria-live="polite">
+            <span>Misión eliminada.</span>
+            <button id="undoDeleteBtn" type="button">Deshacer</button>
+        </div>
+        <div id="levelUpFx" class="level-up-fx" aria-hidden="true">
+            <div class="level-up-content">
+                <h2>¡Subiste de nivel!</h2>
+                <p id="levelUpText">Ahora eres nivel 2</p>
             </div>
         </div>
     </div>

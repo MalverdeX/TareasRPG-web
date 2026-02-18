@@ -24,6 +24,11 @@ class TareasRPG {
         };
         // Bandera para evitar giros simultáneos en la máquina de botín
         this.isLootSpinning = false;
+        this.weeklyGoal = 18;
+        this.recentAchievements = [];
+        this.pendingDeleteTask = null;
+        this.undoDeleteTimer = null;
+        this.uiSettings = { reducedMotion: false };
         
         this.items = [
             { id: 1, name: 'Espada de Hierro', type: 'weapon', rarity: 'common', price: 50, stats: { attack: 5 }, icon: '⚔️' },
@@ -50,13 +55,16 @@ class TareasRPG {
         this.renderDashboardSummary();
         this.renderInventory();
         this.renderMarket();
+        this.renderRecentAchievements();
     }
     
     setupEventListeners() {
         // Navegación
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                this.switchView(e.target.dataset.view);
+                const targetView = e.target.dataset.view;
+                if (!targetView) return;
+                this.switchView(targetView);
             });
         });
         
@@ -118,6 +126,29 @@ class TareasRPG {
         // Claim reward
         document.getElementById('claimReward').addEventListener('click', () => {
             this.claimReward();
+        });
+
+        document.getElementById('dailyCheckinBtn').addEventListener('click', () => {
+            this.claimDailyCheckin();
+        });
+
+        document.getElementById('startJourneyBtn').addEventListener('click', () => {
+            this.startJourney();
+        });
+
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsModal').style.display = 'block';
+        });
+
+        document.getElementById('undoDeleteBtn').addEventListener('click', () => {
+            this.undoDeleteTask();
+        });
+
+        document.getElementById('reducedMotionToggle').addEventListener('change', (event) => {
+            this.uiSettings.reducedMotion = event.target.checked;
+            document.body.classList.toggle('reduced-motion', this.uiSettings.reducedMotion);
+            this.saveToLocalStorage();
+            this.showToast(this.uiSettings.reducedMotion ? 'Animaciones reducidas activadas.' : 'Animaciones reducidas desactivadas.');
         });
     }
     
@@ -198,7 +229,7 @@ class TareasRPG {
         const form = document.getElementById('taskForm');
         
         if (taskId) {
-            const task = this.tasks.find(t => t.id === taskId);
+            const task = this.tasks.find(t => String(t.id) === String(taskId));
             modalTitle.textContent = 'Editar Misión';
             document.getElementById('taskTitle').value = task.title;
             document.getElementById('taskDescription').value = task.description;
@@ -307,6 +338,10 @@ class TareasRPG {
         
         this.saveToLocalStorage();
         this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
+        this.renderSchedule();
+        this.renderCalendar();
         this.renderCalendar();
         this.renderSchedule(); // Agregar esta línea
         document.getElementById('taskModal').style.display = 'none';
@@ -360,7 +395,7 @@ class TareasRPG {
     }
     
     completeTask(taskId) {
-        const task = this.tasks.find(t => t.id === taskId);
+        const task = this.tasks.find(t => String(t.id) === String(taskId));
         if (!task || !this.canCompleteTask(task)) {
             if (!this.canCompleteTask(task)) {
                 alert('Aún no puedes completar esta misión. Debe esperar la fecha y hora establecidas.');
@@ -369,6 +404,7 @@ class TareasRPG {
         }
         
         task.completed = true;
+        task.completedAt = new Date().toISOString();
         
         // Calcular recompensas con bonificación de racha
         const streakBonus = this.calculateStreakBonus(task);
@@ -385,8 +421,11 @@ class TareasRPG {
             this.createRecurringTask(task);
         }
         
+        this.addAchievement(`✅ ${task.title} completada`);
         this.saveToLocalStorage();
         this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
     }
     
     calculateStreakBonus(task) {
@@ -505,14 +544,21 @@ class TareasRPG {
         if (this.pendingReward) {
             this.player.currentExp += this.pendingReward.exp;
             this.player.coins += this.pendingReward.coins;
-            
+
+            const previousLevel = this.player.level;
+
             // Verificar nivel
             while (this.player.currentExp >= this.player.maxExp) {
                 this.player.currentExp -= this.player.maxExp;
                 this.player.level++;
                 this.player.maxExp = Math.floor(this.player.maxExp * 1.5);
             }
-            
+
+            if (this.player.level > previousLevel) {
+                this.showLevelUpAnimation(this.player.level);
+                this.addAchievement(`🌟 Alcanzaste nivel ${this.player.level}`);
+            }
+
             this.updatePlayerStats();
             this.saveToLocalStorage();
             document.getElementById('rewardModal').style.display = 'none';
@@ -653,6 +699,14 @@ class TareasRPG {
         if (!shouldDelete) return;
 
         const normalizedId = String(taskId);
+        const taskToDelete = this.tasks.find(t => String(t.id) === normalizedId);
+
+        this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+
+        if (taskToDelete) {
+            this.pendingDeleteTask = { ...taskToDelete };
+            this.showUndoToast();
+            this.addAchievement(`🗑️ Eliminaste ${taskToDelete.title}`);
         this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
         this.saveToLocalStorage();
         this.renderTasks();
@@ -664,8 +718,50 @@ class TareasRPG {
             this.saveToLocalStorage();
             this.renderTasks();
         }
+
+        this.saveToLocalStorage();
+        this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
+        this.showToast('Misión eliminada.');
     }
-    
+
+    undoDeleteTask() {
+        if (!this.pendingDeleteTask) return;
+
+        this.tasks.push(this.pendingDeleteTask);
+        this.pendingDeleteTask = null;
+        this.hideUndoToast();
+        this.saveToLocalStorage();
+        this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
+        this.showToast('Misión restaurada correctamente.');
+    }
+
+    showUndoToast() {
+        const undoToast = document.getElementById('undoDeleteToast');
+        if (!undoToast) return;
+
+        undoToast.classList.add('active');
+
+        if (this.undoDeleteTimer) {
+            clearTimeout(this.undoDeleteTimer);
+        }
+
+        this.undoDeleteTimer = setTimeout(() => {
+            this.pendingDeleteTask = null;
+            this.hideUndoToast();
+        }, 5000);
+    }
+
+    hideUndoToast() {
+        const undoToast = document.getElementById('undoDeleteToast');
+        if (undoToast) {
+            undoToast.classList.remove('active');
+        }
+    }
+
     renderSchedule() {
         const scheduleGrid = document.getElementById('scheduleGrid');
         const hours = Array.from({length: 24}, (_, i) => `${i.toString().padStart(2, '0')}:00`);
@@ -742,11 +838,6 @@ class TareasRPG {
             });
         });
         
-        // Debug: mostrar información de tareas en consola
-        console.log('Renderizando horario con', this.tasks.length, 'tareas');
-        this.tasks.forEach(task => {
-            console.log('Tarea:', task.title, 'Tipo:', task.repeat, 'Hora:', task.time, 'Fecha:', task.date, 'Día semana:', task.dayOfWeek);
-        });
     }
     
     getTasksForTimeSlot(hour, dayOfWeek) {
@@ -927,6 +1018,25 @@ class TareasRPG {
         });
 
         document.getElementById('dashboardDateLabel').textContent = `Hoy es ${dateLabel}. Enfoque total.`;
+
+        const weekly = this.getWeeklyProgress();
+        document.getElementById('weeklyProgressCount').textContent = weekly.completed;
+        document.getElementById('weeklyGoalCount').textContent = weekly.goal;
+        document.getElementById('weeklyProgressFill').style.width = `${Math.round(weekly.ratio * 100)}%`;
+        document.getElementById('weeklyProgressLabel').textContent = weekly.completed >= weekly.goal
+            ? '¡Cofre semanal desbloqueado! Ve a Cajas de Botín.'
+            : `Te faltan ${Math.max(weekly.goal - weekly.completed, 0)} misión(es) para el cofre semanal.`;
+
+        const today = this.formatDateInput(new Date());
+        const checked = this.appState.lastCheckinDate === today;
+        document.getElementById('checkinStatus').textContent = checked
+            ? 'Check-in diario reclamado. ¡Vuelve mañana para otro bonus!'
+            : 'Reclama tu bonus diario para mantener el hábito.';
+
+        const journeyTarget = availableNow.length > 0
+            ? `Tienes ${availableNow.length} misión(es) listas para completar.`
+            : 'Pulsa para iniciar tu jornada';
+        document.getElementById('missionHookText').textContent = journeyTarget;
     }
 
     updatePlayerStats() {
@@ -1035,6 +1145,7 @@ class TareasRPG {
             this.updatePlayerStats();
             this.renderInventory();
             this.renderMarket();
+        this.renderRecentAchievements();
             this.saveToLocalStorage();
         } else {
             alert('No tienes suficientes monedas');
@@ -1060,6 +1171,28 @@ class TareasRPG {
         if (this.player.coins < price) {
             alert('No tienes suficientes monedas');
             return;
+        }
+
+        this.isLootSpinning = true;
+        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = true);
+
+        try {
+            this.player.coins -= price;
+            this.updatePlayerStats();
+
+            const rarityPool = this.getRandomLoot(rarity);
+            const wonItem = rarityPool[Math.floor(Math.random() * rarityPool.length)];
+
+            await this.animateLootMachine(rarity, wonItem);
+
+            this.player.inventory.push({ ...wonItem });
+            this.renderInventory();
+            this.saveToLocalStorage();
+            this.showLootRewardAnimation(rarity);
+            this.addAchievement(`🎁 Botín ${rarity}: ${wonItem.name}`);
+        } finally {
+            this.isLootSpinning = false;
+            document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = false);
         }
 
         this.isLootSpinning = true;
@@ -1180,11 +1313,136 @@ class TareasRPG {
         return colors[rarity] || '#FFFFFF';
     }
     
+
+    getWeekKey(date = new Date()) {
+        const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+        const days = Math.floor((date - firstDayOfYear) / 86400000);
+        const weekNumber = Math.ceil((days + firstDayOfYear.getDay() + 1) / 7);
+        return `${date.getFullYear()}-W${weekNumber}`;
+    }
+
+    getWeeklyProgress() {
+        const currentWeek = this.getWeekKey();
+        const weeklyCompleted = this.tasks.filter(task => {
+            if (!task.completedAt) return false;
+            return this.getWeekKey(new Date(task.completedAt)) === currentWeek;
+        }).length;
+
+        return {
+            completed: weeklyCompleted,
+            goal: this.weeklyGoal,
+            ratio: Math.min(weeklyCompleted / this.weeklyGoal, 1)
+        };
+    }
+
+    claimDailyCheckin() {
+        const today = this.formatDateInput(new Date());
+        if (this.appState.lastCheckinDate === today) {
+            this.showToast('Ya reclamaste tu check-in de hoy.');
+            return;
+        }
+
+        this.player.coins += 20;
+        this.player.currentExp += 15;
+        this.appState.lastCheckinDate = today;
+        this.addAchievement('🎯 Check-in diario completado');
+        this.showToast('Check-in diario: +20 monedas, +15 EXP');
+        this.normalizeLevelAfterGain();
+        this.updatePlayerStats();
+        this.saveToLocalStorage();
+        this.renderDashboardSummary();
+    }
+
+    normalizeLevelAfterGain() {
+        const previousLevel = this.player.level;
+        while (this.player.currentExp >= this.player.maxExp) {
+            this.player.currentExp -= this.player.maxExp;
+            this.player.level++;
+            this.player.maxExp = Math.floor(this.player.maxExp * 1.5);
+        }
+
+        if (this.player.level > previousLevel) {
+            this.showLevelUpAnimation(this.player.level);
+        }
+    }
+
+    startJourney() {
+        const pending = this.tasks.filter(t => !t.completed && this.isTaskForToday(t));
+        if (pending.length > 0) {
+            this.showToast(`Jornada iniciada: tienes ${pending.length} misión(es) de hoy.`);
+            this.switchView('dashboard');
+            return;
+        }
+
+        this.openTaskModal();
+        this.showToast('No tienes misiones de hoy. Crea una para empezar.');
+    }
+
+    addAchievement(text) {
+        this.recentAchievements.unshift(`${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} · ${text}`);
+        this.recentAchievements = this.recentAchievements.slice(0, 6);
+        this.renderRecentAchievements();
+    }
+
+    renderRecentAchievements() {
+        const list = document.getElementById('recentAchievements');
+        if (!list) return;
+
+        if (this.recentAchievements.length === 0) {
+            list.innerHTML = '<li>Aún no hay logros. Completa tu primera misión de hoy.</li>';
+            return;
+        }
+
+        list.innerHTML = this.recentAchievements.map(item => `<li>${item}</li>`).join('');
+    }
+
+    showToast(message) {
+        const toast = document.getElementById('toast');
+        if (!toast) return;
+
+        toast.textContent = message;
+        toast.classList.add('active');
+
+        clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => {
+            toast.classList.remove('active');
+        }, 2400);
+    }
+
+    showLevelUpAnimation(level) {
+        const fx = document.getElementById('levelUpFx');
+        const text = document.getElementById('levelUpText');
+        if (!fx || !text) return;
+
+        text.textContent = `Ahora eres nivel ${level}`;
+        fx.classList.add('active');
+
+        setTimeout(() => {
+            fx.classList.remove('active');
+        }, this.uiSettings.reducedMotion ? 800 : 1700);
+    }
+
+    showLootRewardAnimation(rarity) {
+        if (this.uiSettings.reducedMotion) return;
+
+        const machine = document.getElementById('lootMachine');
+        if (!machine) return;
+
+        machine.classList.remove('loot-win-common', 'loot-win-rare', 'loot-win-epic');
+        machine.classList.add(`loot-win-${rarity}`);
+
+        setTimeout(() => {
+            machine.classList.remove('loot-win-common', 'loot-win-rare', 'loot-win-epic');
+        }, 1400);
+    }
+
     saveToLocalStorage() {
         localStorage.setItem('tareasrpg_player', JSON.stringify(this.player));
         localStorage.setItem('tareasrpg_tasks', JSON.stringify(this.tasks));
         localStorage.setItem('tareasrpg_streaks', JSON.stringify(this.taskStreaks));
         localStorage.setItem('tareasrpg_app_state', JSON.stringify(this.appState));
+        localStorage.setItem('tareasrpg_ui_settings', JSON.stringify(this.uiSettings));
+        localStorage.setItem('tareasrpg_achievements', JSON.stringify(this.recentAchievements));
     }
     
     loadFromLocalStorage() {
@@ -1192,6 +1450,8 @@ class TareasRPG {
         const savedTasks = localStorage.getItem('tareasrpg_tasks');
         const savedStreaks = localStorage.getItem('tareasrpg_streaks');
         const savedAppState = localStorage.getItem('tareasrpg_app_state');
+        const savedUISettings = localStorage.getItem('tareasrpg_ui_settings');
+        const savedAchievements = localStorage.getItem('tareasrpg_achievements');
         
         if (savedPlayer) {
             this.player = JSON.parse(savedPlayer);
@@ -1207,6 +1467,17 @@ class TareasRPG {
 
         if (savedAppState) {
             this.appState = JSON.parse(savedAppState);
+        }
+
+        if (savedUISettings) {
+            this.uiSettings = { ...this.uiSettings, ...JSON.parse(savedUISettings) };
+            document.body.classList.toggle('reduced-motion', this.uiSettings.reducedMotion);
+            const toggle = document.getElementById('reducedMotionToggle');
+            if (toggle) toggle.checked = this.uiSettings.reducedMotion;
+        }
+
+        if (savedAchievements) {
+            this.recentAchievements = JSON.parse(savedAchievements);
         }
         
         // Renderizar horario después de cargar los datos

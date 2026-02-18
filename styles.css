@@ -892,3 +892,142 @@ h1 {
     50% { transform: scale(1.05); }
     100% { transform: scale(1); }
 }
+
+
+.mission-hook-card {
+    border-color: #6fa8ff;
+}
+
+.mission-hook-card strong {
+    font-size: 20px;
+    color: #cfe2ff;
+}
+
+.weekly-progress-bar {
+    height: 10px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.weekly-progress-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, #59d39b, #ffd700);
+    transition: width 0.35s ease;
+}
+
+.habit-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.habit-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.habit-card h3 {
+    margin-bottom: 10px;
+}
+
+.achievements-list {
+    margin-top: 8px;
+    margin-left: 18px;
+    color: var(--text-secondary);
+}
+
+.settings-options {
+    display: grid;
+    gap: 10px;
+}
+
+.settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.toast, .undo-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1600;
+    background: rgba(20, 12, 8, 0.95);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 14px;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+.toast.active, .undo-toast.active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.undo-toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    bottom: 66px;
+}
+
+.undo-toast button {
+    background: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.level-up-fx {
+    position: fixed;
+    inset: 0;
+    z-index: 1700;
+    display: none;
+    place-items: center;
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(255,215,0,0.25) 0%, rgba(0,0,0,0.75) 68%);
+}
+
+.level-up-fx.active {
+    display: grid;
+}
+
+.level-up-content {
+    background: rgba(28, 18, 12, 0.96);
+    border: 2px solid var(--accent-color);
+    border-radius: 12px;
+    padding: 20px 24px;
+    text-align: center;
+    box-shadow: 0 0 35px rgba(255, 215, 0, 0.5);
+    animation: levelPop 1.1s ease;
+}
+
+@keyframes levelPop {
+    0% { transform: scale(0.8); opacity: 0; }
+    40% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.loot-machine.loot-win-common { box-shadow: 0 0 24px rgba(52, 168, 83, 0.5); }
+.loot-machine.loot-win-rare { box-shadow: 0 0 28px rgba(251, 188, 4, 0.55); }
+.loot-machine.loot-win-epic { box-shadow: 0 0 38px rgba(168, 85, 247, 0.65), 0 0 68px rgba(255, 215, 0, 0.3); }
+
+.reduced-motion *,
+.reduced-motion *::before,
+.reduced-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+}
