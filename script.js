@@ -125,6 +125,19 @@ class TareasRPG {
         document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
         this.currentView = viewName;
     }
+
+    parseDateInput(dateString) {
+        if (!dateString) return null;
+        const [year, month, day] = dateString.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
     
     toggleDateFields() {
         const repeat = document.getElementById('taskRepeat').value;
@@ -155,7 +168,7 @@ class TareasRPG {
         }
     }
     
-    openTaskModal(taskId = null) {
+    openTaskModal(taskId = null, defaultValues = {}) {
         const modal = document.getElementById('taskModal');
         const modalTitle = document.getElementById('modalTitle');
         const form = document.getElementById('taskForm');
@@ -169,7 +182,7 @@ class TareasRPG {
             document.getElementById('taskRepeat').value = task.repeat;
             document.getElementById('taskDate').value = task.date || '';
             document.getElementById('taskTime').value = task.time || '';
-            document.getElementById('taskDayOfWeek').value = task.dayOfWeek || '';
+            document.getElementById('taskDayOfWeek').value = task.dayOfWeek ?? '';
             this.toggleDateFields();
             this.calculateRewards();
             form.dataset.taskId = taskId;
@@ -177,7 +190,23 @@ class TareasRPG {
             modalTitle.textContent = 'Nueva Misión';
             form.reset();
             delete form.dataset.taskId;
+
+            if (defaultValues.repeat) {
+                document.getElementById('taskRepeat').value = defaultValues.repeat;
+            }
+
             this.toggleDateFields();
+
+            if (defaultValues.time) {
+                document.getElementById('taskTime').value = defaultValues.time;
+            }
+            if (defaultValues.date) {
+                document.getElementById('taskDate').value = defaultValues.date;
+            }
+            if (defaultValues.dayOfWeek !== undefined) {
+                document.getElementById('taskDayOfWeek').value = defaultValues.dayOfWeek;
+            }
+
             this.calculateRewards();
         }
         
@@ -267,7 +296,7 @@ class TareasRPG {
             case 'none':
                 // Tarea única: debe ser el día correcto y después de la hora
                 if (!task.date || !task.time) return false;
-                const taskDate = new Date(task.date).toDateString();
+                const taskDate = this.parseDateInput(task.date)?.toDateString();
                 const [hours, minutes] = task.time.split(':').map(Number);
                 const taskTime = hours * 60 + minutes;
                 return taskDate === today && currentTime >= taskTime;
@@ -290,7 +319,8 @@ class TareasRPG {
             case 'monthly':
                 // Tarea mensual: debe ser el día correcto y después de la hora
                 if (!task.date || !task.time) return false;
-                const monthlyTaskDate = new Date(task.date);
+                const monthlyTaskDate = this.parseDateInput(task.date);
+                if (!monthlyTaskDate) return false;
                 const [monthlyHours, monthlyMinutes] = task.time.split(':').map(Number);
                 const monthlyTaskTime = monthlyHours * 60 + monthlyMinutes;
                 return monthlyTaskDate.getDate() === now.getDate() && 
@@ -396,14 +426,17 @@ class TareasRPG {
             case 'monthly':
                 // Próximo mes, mismo día
                 newDate.setMonth(newDate.getMonth() + 1);
-                newDate.setDate(new Date(originalTask.date).getDate());
+                const originalDate = this.parseDateInput(originalTask.date);
+                if (originalDate) {
+                    newDate.setDate(originalDate.getDate());
+                }
                 break;
         }
         
         const newTask = {
             ...originalTask,
             id: Date.now(),
-            date: newDate.toISOString().split('T')[0],
+            date: this.formatDateInput(newDate),
             completed: false
         };
         
@@ -504,8 +537,10 @@ class TareasRPG {
                 break;
             case 'monthly':
                 if (task.date) {
-                    const date = new Date(task.date);
-                    timeInfo = `<span>📅 Día ${date.getDate()} de cada mes a las ${task.time || '00:00'}</span>`;
+                    const date = this.parseDateInput(task.date);
+                    if (date) {
+                        timeInfo = `<span>📅 Día ${date.getDate()} de cada mes a las ${task.time || '00:00'}</span>`;
+                    }
                 }
                 break;
         }
@@ -590,9 +625,6 @@ class TareasRPG {
                 }
                 
                 timeCell.addEventListener('click', () => {
-                    // Abrir modal con hora y día preseleccionados
-                    document.getElementById('taskTime').value = `${hourIndex.toString().padStart(2, '0')}:00`;
-                    
                     // Calcular la fecha para este día de la semana
                     const now = new Date();
                     const today = now.getDay(); // 0 = Domingo, 1 = Lunes, etc.
@@ -600,26 +632,18 @@ class TareasRPG {
                     
                     // Calcular la diferencia de días
                     let daysDiff = dayIndex - currentDayIndex;
-                    if (daysDiff <= 0) {
-                        daysDiff += 7; // Si es hoy o un día anterior, usar la próxima semana
+                    if (daysDiff < 0) {
+                        daysDiff += 7; // Si es un día anterior, usar la próxima semana
                     }
                     
                     const targetDate = new Date(now);
                     targetDate.setDate(now.getDate() + daysDiff);
-                    
-                    // Preseleccionar según el contexto
-                    if (dayIndex === 0) {
-                        // Si es lunes, sugerir tarea semanal
-                        document.getElementById('taskRepeat').value = 'weekly';
-                        document.getElementById('taskDayOfWeek').value = '1'; // Lunes
-                    } else {
-                        // Para otros días, sugerir tarea única con la fecha calculada
-                        document.getElementById('taskRepeat').value = 'none';
-                        document.getElementById('taskDate').value = targetDate.toISOString().split('T')[0];
-                    }
-                    
-                    this.toggleDateFields();
-                    this.openTaskModal();
+
+                    this.openTaskModal(null, {
+                        repeat: 'none',
+                        time: `${hourIndex.toString().padStart(2, '0')}:00`,
+                        date: this.formatDateInput(targetDate)
+                    });
                 });
                 
                 scheduleGrid.appendChild(timeCell);
@@ -644,7 +668,7 @@ class TareasRPG {
                 case 'none':
                     // Tarea única: verificar si coincide con la fecha y hora
                     if (!task.date) return false;
-                    const taskDate = new Date(task.date);
+                    const taskDate = this.parseDateInput(task.date);
                     const taskDayOfWeek = taskDate.getDay(); // 0 = Domingo, 1 = Lunes, etc.
                     // Convertir nuestro formato (0=Lunes) al formato JavaScript (0=Domingo)
                     const scheduleDayOfWeek = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
@@ -663,7 +687,7 @@ class TareasRPG {
                 case 'monthly':
                     // Tarea mensual: verificar día del mes
                     if (!task.date) return false;
-                    const monthlyDate = new Date(task.date);
+                    const monthlyDate = this.parseDateInput(task.date);
                     const monthlyDay = monthlyDate.getDate();
                     const now = new Date();
                     const currentMonth = now.getMonth();
@@ -726,8 +750,10 @@ class TareasRPG {
             `;
             
             dayEl.addEventListener('click', () => {
-                document.getElementById('taskDate').value = dateStr;
-                this.openTaskModal();
+                this.openTaskModal(null, {
+                    repeat: 'none',
+                    date: dateStr
+                });
             });
             
             calendarGrid.appendChild(dayEl);
