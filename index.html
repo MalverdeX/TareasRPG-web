@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tareas RPG - Organizador Medieval</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="player-info">
+                <div class="avatar">
+                    <img src="https://via.placeholder.com/60" alt="Avatar" id="playerAvatar">
+                </div>
+                <div class="stats">
+                    <h2 id="playerName">Aventurero</h2>
+                    <div class="stat-bar">
+                        <span>Nivel <span id="playerLevel">1</span></span>
+                        <div class="exp-bar">
+                            <div class="exp-fill" id="expFill"></div>
+                        </div>
+                        <span><span id="currentExp">0</span>/<span id="maxExp">100</span> EXP</span>
+                    </div>
+                    <div class="coins">
+                        <span class="coin-icon">💰</span>
+                        <span id="playerCoins">0</span> monedas
+                    </div>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <button class="nav-btn active" data-view="dashboard">Tablero</button>
+                <button class="nav-btn" data-view="calendar">Calendario</button>
+                <button class="nav-btn" data-view="inventory">Inventario</button>
+                <button class="nav-btn" data-view="market">Mercado</button>
+                <button class="nav-btn" data-view="loot">Cajas de Botín</button>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <!-- Vista Dashboard -->
+            <section id="dashboard" class="view active">
+                <div class="dashboard-header">
+                    <h1>Misiones del Día</h1>
+                    <button class="btn-primary" id="addTaskBtn">+ Nueva Misión</button>
+                </div>
+                
+                <div class="week-schedule">
+                    <h2>Horario Semanal</h2>
+                    <div class="schedule-grid" id="scheduleGrid">
+                        <!-- Se generará dinámicamente -->
+                    </div>
+                </div>
+
+                <div class="tasks-container">
+                    <div class="tasks-section">
+                        <h3>Misiones Pendientes</h3>
+                        <div class="task-list" id="pendingTasks">
+                            <!-- Las tareas se agregarán dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <div class="tasks-section">
+                        <h3>Misiones Completadas</h3>
+                        <div class="task-list" id="completedTasks">
+                            <!-- Las tareas completadas se mostrarán aquí -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista Calendario -->
+            <section id="calendar" class="view">
+                <h1>Calendario de Aventuras</h1>
+                <div class="calendar-container">
+                    <div class="calendar-header">
+                        <button id="prevMonth">&lt;</button>
+                        <h2 id="currentMonth">Enero 2024</h2>
+                        <button id="nextMonth">&gt;</button>
+                    </div>
+                    <div class="calendar-grid" id="calendarGrid">
+                        <!-- Se generará dinámicamente -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista Inventario -->
+            <section id="inventory" class="view">
+                <h1>Inventario del Héroe</h1>
+                <div class="inventory-grid" id="inventoryGrid">
+                    <!-- Los objetos se mostrarán aquí -->
+                </div>
+                <div class="character-stats">
+                    <h3>Estadísticas del Personaje</h3>
+                    <div class="equipment-slots">
+                        <div class="equipment-slot" data-slot="head">
+                            <span>Cabeza</span>
+                            <div class="slot-item"></div>
+                        </div>
+                        <div class="equipment-slot" data-slot="chest">
+                            <span>Pecho</span>
+                            <div class="slot-item"></div>
+                        </div>
+                        <div class="equipment-slot" data-slot="weapon">
+                            <span>Arma</span>
+                            <div class="slot-item"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista Mercado -->
+            <section id="market" class="view">
+                <h1>Mercado Medieval</h1>
+                <div class="market-tabs">
+                    <button class="tab-btn active" data-tab="buy">Comprar</button>
+                    <button class="tab-btn" data-tab="sell">Vender</button>
+                </div>
+                <div class="market-content">
+                    <div class="market-grid" id="marketGrid">
+                        <!-- Los objetos del mercado se mostrarán aquí -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista Cajas de Botín -->
+            <section id="loot" class="view">
+                <h1>Cajas de Botín Mágicas</h1>
+                <div class="loot-boxes">
+                    <div class="loot-box" data-rarity="common">
+                        <div class="box-icon">📦</div>
+                        <h3>Caja Común</h3>
+                        <p>Objetos básicos</p>
+                        <div class="price">💰 50</div>
+                        <button class="btn-buy" data-price="50" data-rarity="common">Abrir</button>
+                    </div>
+                    <div class="loot-box" data-rarity="rare">
+                        <div class="box-icon">🎁</div>
+                        <h3>Caja Rara</h3>
+                        <p>Objetos valiosos</p>
+                        <div class="price">💰 150</div>
+                        <button class="btn-buy" data-price="150" data-rarity="rare">Abrir</button>
+                    </div>
+                    <div class="loot-box" data-rarity="epic">
+                        <div class="box-icon">🏆</div>
+                        <h3>Casa Épica</h3>
+                        <p>Objetos legendarios</p>
+                        <div class="price">💰 300</div>
+                        <button class="btn-buy" data-price="300" data-rarity="epic">Abrir</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modal para agregar/editar tareas -->
+        <div id="taskModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2 id="modalTitle">Nueva Misión</h2>
+                <form id="taskForm">
+                    <div class="form-group">
+                        <label for="taskTitle">Título de la Misión:</label>
+                        <input type="text" id="taskTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskDescription">Descripción:</label>
+                        <textarea id="taskDescription"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskPriority">Prioridad:</label>
+                        <select id="taskPriority">
+                            <option value="low">Baja (Verde)</option>
+                            <option value="medium">Media (Amarillo)</option>
+                            <option value="high">Alta (Roja)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskExp">Experiencia:</label>
+                        <input type="number" id="taskExp" min="10" max="100" value="10">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskCoins">Monedas:</label>
+                        <input type="number" id="taskCoins" min="5" max="50" value="5">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskRepeat">Repetir:</label>
+                        <select id="taskRepeat">
+                            <option value="none">No repetir</option>
+                            <option value="daily">Diario</option>
+                            <option value="weekly">Semanal</option>
+                            <option value="monthly">Mensual</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskDate">Fecha:</label>
+                        <input type="date" id="taskDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskTime">Hora:</label>
+                        <input type="time" id="taskTime">
+                    </div>
+                    <button type="submit" class="btn-primary">Guardar Misión</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal para mostrar recompensas -->
+        <div id="rewardModal" class="modal">
+            <div class="modal-content reward-modal">
+                <span class="close">&times;</span>
+                <h2>¡Misión Completada!</h2>
+                <div class="reward-display">
+                    <div class="reward-item">
+                        <span class="reward-icon">⭐</span>
+                        <span class="reward-text">+<span id="rewardExp">10</span> EXP</span>
+                    </div>
+                    <div class="reward-item">
+                        <span class="reward-icon">💰</span>
+                        <span class="reward-text">+<span id="rewardCoins">5</span> monedas</span>
+                    </div>
+                </div>
+                <button class="btn-primary" id="claimReward">Reclamar Recompensa</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
