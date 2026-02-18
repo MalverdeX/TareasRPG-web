@@ -270,18 +270,21 @@ h1 {
 }
 
 .task-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
 }
 
 .task-item {
-    background: var(--surface-color);
+    background: linear-gradient(145deg, rgba(62, 36, 24, 0.95), rgba(44, 24, 16, 0.92));
     padding: 15px;
-    border-radius: 8px;
+    border-radius: 10px;
     border-left: 4px solid var(--success-color);
-    cursor: pointer;
     transition: all 0.3s ease;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .task-item.priority-high {
@@ -304,6 +307,17 @@ h1 {
 .task-item.completed {
     opacity: 0.6;
     text-decoration: line-through;
+}
+
+.task-empty {
+    grid-column: 1 / -1;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 18px;
+    color: var(--text-secondary);
+    text-align: center;
+    font-style: italic;
 }
 
 .modal {
@@ -589,6 +603,118 @@ h1 {
     margin: 15px 0;
 }
 
+
+.loot-machine {
+    position: relative;
+    margin-top: 24px;
+    padding: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: radial-gradient(circle at top, rgba(255, 215, 0, 0.12), rgba(44, 24, 16, 0.9));
+    overflow: hidden;
+}
+
+.loot-machine h3 {
+    margin-bottom: 6px;
+}
+
+.loot-machine-subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.loot-reel-window {
+    position: relative;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.35);
+    height: 100px;
+}
+
+.loot-reel-track {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    will-change: transform;
+}
+
+.reel-item {
+    min-width: 112px;
+    height: 78px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(62, 36, 24, 0.9);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+}
+
+.reel-item.rarity-common { box-shadow: inset 0 0 0 1px rgba(34,139,34,0.5); }
+.reel-item.rarity-rare { box-shadow: inset 0 0 0 1px rgba(255,140,0,0.6); }
+.reel-item.rarity-epic { box-shadow: inset 0 0 0 1px rgba(255,215,0,0.7); }
+
+.reel-icon {
+    font-size: 24px;
+}
+
+.reel-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 0 4px;
+}
+
+.loot-pointer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    background: linear-gradient(to bottom, transparent, var(--accent-color), transparent);
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
+.loot-result {
+    margin-top: 12px;
+    min-height: 26px;
+    font-weight: 600;
+}
+
+.loot-particles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.loot-particle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    opacity: 0;
+    animation-name: lootBurst;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+}
+
+@keyframes lootBurst {
+    0% {
+        transform: translate(0, 0) scale(0.8);
+        opacity: 0;
+    }
+    15% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--dx, 0px), var(--dy, -140px)) scale(0.1);
+        opacity: 0;
+    }
+}
+
 .reward-modal {
     text-align: center;
 }
@@ -627,6 +753,10 @@ h1 {
     }
 
     .tasks-container {
+        grid-template-columns: 1fr;
+    }
+
+    .task-list {
         grid-template-columns: 1fr;
     }
     

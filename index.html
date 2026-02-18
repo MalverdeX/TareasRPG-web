@@ -32,6 +32,7 @@
             </div>
             <nav class="main-nav">
                 <button class="nav-btn active" data-view="dashboard">Tablero</button>
+                <button class="nav-btn" data-view="schedule">Horario</button>
                 <button class="nav-btn" data-view="calendar">Calendario</button>
                 <button class="nav-btn" data-view="inventory">Inventario</button>
                 <button class="nav-btn" data-view="market">Mercado</button>
@@ -73,13 +74,6 @@
                     </article>
                 </div>
                 
-                <div class="week-schedule">
-                    <h2>Horario Semanal</h2>
-                    <div class="schedule-grid" id="scheduleGrid">
-                        <!-- Se generará dinámicamente -->
-                    </div>
-                </div>
-
                 <div class="tasks-container">
                     <div class="tasks-section">
                         <h3>Misiones Pendientes</h3>
@@ -93,6 +87,16 @@
                         <div class="task-list" id="completedTasks">
                             <!-- Las tareas completadas se mostrarán aquí -->
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vista Horario -->
+            <section id="schedule" class="view">
+                <h1>Horario Semanal</h1>
+                <div class="week-schedule">
+                    <div class="schedule-grid" id="scheduleGrid">
+                        <!-- Se generará dinámicamente -->
                     </div>
                 </div>
             </section>
@@ -171,11 +175,22 @@
                     </div>
                     <div class="loot-box" data-rarity="epic">
                         <div class="box-icon">🏆</div>
-                        <h3>Casa Épica</h3>
+                        <h3>Caja Épica</h3>
                         <p>Objetos legendarios</p>
                         <div class="price">💰 300</div>
                         <button class="btn-buy" data-price="300" data-rarity="epic">Abrir</button>
                     </div>
+                </div>
+
+                <div class="loot-machine" id="lootMachine">
+                    <h3>🎰 Máquina Arcana</h3>
+                    <p class="loot-machine-subtitle">Gira la ruleta y observa los posibles premios antes del resultado final.</p>
+                    <div class="loot-reel-window">
+                        <div class="loot-reel-track" id="lootReelTrack"></div>
+                        <div class="loot-pointer"></div>
+                    </div>
+                    <div class="loot-result" id="lootResult">Elige una caja para comenzar.</div>
+                    <div class="loot-particles" id="lootParticles" aria-hidden="true"></div>
                 </div>
             </section>
         </main>
