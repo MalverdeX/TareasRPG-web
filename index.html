@@ -12,9 +12,10 @@
         <header class="header">
             <div class="player-info">
                 <div class="avatar">
-                    <img src="https://via.placeholder.com/60" alt="Avatar" id="playerAvatar">
+                    <img src="https://via.placeholder.com/80" alt="Avatar" id="playerAvatar">
                 </div>
                 <div class="stats">
+                    <p class="player-label">Centro de control</p>
                     <h2 id="playerName">Aventurero</h2>
                     <div class="stat-bar">
                         <span>Nivel <span id="playerLevel">1</span></span>
@@ -42,8 +43,34 @@
             <!-- Vista Dashboard -->
             <section id="dashboard" class="view active">
                 <div class="dashboard-header">
-                    <h1>Misiones del Día</h1>
+                    <div>
+                        <h1>Resumen Ejecutivo</h1>
+                        <p class="dashboard-subtitle" id="dashboardDateLabel">Tu jornada está lista.</p>
+                    </div>
                     <button class="btn-primary" id="addTaskBtn">+ Nueva Misión</button>
+                </div>
+
+                <div class="executive-summary">
+                    <article class="summary-card highlight">
+                        <span class="summary-title">Misiones de hoy</span>
+                        <strong id="summaryTodayCount">0</strong>
+                        <small id="summaryReadyCount">0 disponibles ahora</small>
+                    </article>
+                    <article class="summary-card">
+                        <span class="summary-title">Pendientes</span>
+                        <strong id="summaryPendingCount">0</strong>
+                        <small id="summaryCompletedCount">0 completadas</small>
+                    </article>
+                    <article class="summary-card">
+                        <span class="summary-title">Economía</span>
+                        <strong id="summaryCoinsCount">0 monedas</strong>
+                        <small id="summaryInventoryCount">0 objetos en inventario</small>
+                    </article>
+                    <article class="summary-card">
+                        <span class="summary-title">Progreso</span>
+                        <strong>Nivel <span id="summaryLevel">1</span></strong>
+                        <small id="summaryExpPercent">0% hacia el siguiente nivel</small>
+                    </article>
                 </div>
                 
                 <div class="week-schedule">
