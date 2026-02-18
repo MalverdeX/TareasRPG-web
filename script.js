@@ -707,6 +707,16 @@ class TareasRPG {
             this.pendingDeleteTask = { ...taskToDelete };
             this.showUndoToast();
             this.addAchievement(`🗑️ Eliminaste ${taskToDelete.title}`);
+        this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+        this.saveToLocalStorage();
+        this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
+        if (confirm('¿Estás seguro de que quieres eliminar esta misión?')) {
+            const normalizedId = String(taskId);
+            this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+            this.saveToLocalStorage();
+            this.renderTasks();
         }
 
         this.saveToLocalStorage();
@@ -1184,6 +1194,24 @@ class TareasRPG {
             this.isLootSpinning = false;
             document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = false);
         }
+
+        this.isLootSpinning = true;
+        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = true);
+
+        this.player.coins -= price;
+        this.updatePlayerStats();
+
+        const rarityPool = this.getRandomLoot(rarity);
+        const wonItem = rarityPool[Math.floor(Math.random() * rarityPool.length)];
+
+        await this.animateLootMachine(rarity, wonItem);
+
+        this.player.inventory.push({ ...wonItem });
+        this.renderInventory();
+        this.saveToLocalStorage();
+
+        this.isLootSpinning = false;
+        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = false);
     }
 
     getRandomLoot(rarity) {
