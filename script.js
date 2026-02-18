@@ -295,8 +295,11 @@ class TareasRPG {
         }
         
         if (taskId) {
-            const index = this.tasks.findIndex(t => t.id === taskId);
-            this.tasks[index] = { ...this.tasks[index], ...taskData };
+            const normalizedId = String(taskId);
+            const index = this.tasks.findIndex(t => String(t.id) === normalizedId);
+            if (index !== -1) {
+                this.tasks[index] = { ...this.tasks[index], ...taskData };
+            }
         } else {
             taskData.id = Date.now();
             this.tasks.push(taskData);
@@ -643,6 +646,18 @@ class TareasRPG {
     }
     
     deleteTask(taskId) {
+        const shouldDelete = typeof window.confirm === 'function'
+            ? window.confirm('¿Estás seguro de que quieres eliminar esta misión?')
+            : true;
+
+        if (!shouldDelete) return;
+
+        const normalizedId = String(taskId);
+        this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+        this.saveToLocalStorage();
+        this.renderTasks();
+        this.renderSchedule();
+        this.renderCalendar();
         if (confirm('¿Estás seguro de que quieres eliminar esta misión?')) {
             const normalizedId = String(taskId);
             this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
@@ -819,7 +834,8 @@ class TareasRPG {
             dayEl.className = 'calendar-day';
             
             const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-            const dayTasks = this.tasks.filter(t => t.date === dateStr);
+            const dateObj = new Date(year, month, day);
+            const dayTasks = this.tasks.filter(t => this.isTaskScheduledForDate(t, dateObj));
             
             dayEl.innerHTML = `
                 <div style="font-weight: bold;">${day}</div>
@@ -842,6 +858,29 @@ class TareasRPG {
                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
         return months[month];
     }
+
+    isTaskScheduledForDate(task, dateObj) {
+        if (task.completed) return false;
+
+        const targetDate = this.formatDateInput(dateObj);
+
+        switch (task.repeat) {
+            case 'none':
+                return task.date === targetDate;
+            case 'daily':
+                return Boolean(task.time);
+            case 'weekly':
+                return task.dayOfWeek === dateObj.getDay();
+            case 'monthly': {
+                if (!task.date) return false;
+                const monthlyDate = this.parseDateInput(task.date);
+                return monthlyDate ? monthlyDate.getDate() === dateObj.getDate() : false;
+            }
+            default:
+                return false;
+        }
+    }
+
     
     isTaskForToday(task) {
         const now = new Date();
