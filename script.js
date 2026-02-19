@@ -120,7 +120,8 @@ class TareasRPG {
         // Cajas de botín
         document.querySelectorAll('.btn-buy').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                this.openLootBox(e.target.dataset.rarity, parseInt(e.target.dataset.price));
+                const { rarity, price } = e.currentTarget.dataset;
+                this.openLootBox(rarity, Number(price));
             });
         });
         
@@ -1191,7 +1192,13 @@ class TareasRPG {
             return;
         }
 
-        if (this.player.coins < price) {
+        const normalizedPrice = Number(price);
+        if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
+            this.showToast('No se pudo abrir el cofre: precio inválido.');
+            return;
+        }
+
+        if (this.player.coins < normalizedPrice) {
             alert('No tienes suficientes monedas');
             return;
         }
@@ -1200,10 +1207,14 @@ class TareasRPG {
         document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = true);
 
         try {
-            this.player.coins -= price;
+            this.player.coins -= normalizedPrice;
             this.updatePlayerStats();
 
             const rarityPool = this.getRandomLoot(rarity);
+            if (!rarityPool.length) {
+                throw new Error('Loot pool vacío para la rareza seleccionada.');
+            }
+
             const wonItem = rarityPool[Math.floor(Math.random() * rarityPool.length)];
 
             await this.animateLootMachine(rarity, wonItem);
@@ -1213,28 +1224,16 @@ class TareasRPG {
             this.saveToLocalStorage();
             this.showLootRewardAnimation(rarity);
             this.addAchievement(`🎁 Botín ${rarity}: ${wonItem.name}`);
+        } catch (error) {
+            // Revertir monedas si algo falla durante la apertura.
+            this.player.coins += normalizedPrice;
+            this.updatePlayerStats();
+            console.error(error);
+            this.showToast('Hubo un problema al abrir el cofre. Se revirtió la compra.');
         } finally {
             this.isLootSpinning = false;
             document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = false);
         }
-
-        this.isLootSpinning = true;
-        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = true);
-
-        this.player.coins -= price;
-        this.updatePlayerStats();
-
-        const rarityPool = this.getRandomLoot(rarity);
-        const wonItem = rarityPool[Math.floor(Math.random() * rarityPool.length)];
-
-        await this.animateLootMachine(rarity, wonItem);
-
-        this.player.inventory.push({ ...wonItem });
-        this.renderInventory();
-        this.saveToLocalStorage();
-
-        this.isLootSpinning = false;
-        document.querySelectorAll('.btn-buy').forEach(btn => btn.disabled = false);
     }
 
     getRandomLoot(rarity) {
@@ -1261,7 +1260,6 @@ class TareasRPG {
         }
 
         const previewPool = [...this.items, ...this.items.filter(i => i.rarity !== 'common')];
-        const cardWidth = 120;
         const totalCards = 28;
 
         const reelItems = [];
@@ -1271,12 +1269,18 @@ class TareasRPG {
         }
         reelItems.push(wonItem);
 
-        reelTrack.innerHTML = reelItems.map(item => `
-            <article class="reel-item rarity-${item.rarity}">
-                <div class="reel-icon">${item.icon}</div>
-                <div class="reel-name">${item.name}</div>
+        reelTrack.innerHTML = reelItems.map(item => {
+            const icon = item.icon || '🎁';
+            const name = item.name || 'Recompensa misteriosa';
+            const rarityClass = item.rarity || 'common';
+
+            return `
+            <article class="reel-item rarity-${rarityClass}">
+                <div class="reel-icon">${icon}</div>
+                <div class="reel-name">${name}</div>
             </article>
-        `).join('');
+        `;
+        }).join('');
 
         reelTrack.style.transition = 'none';
         reelTrack.style.transform = 'translateX(0px)';
@@ -1284,9 +1288,23 @@ class TareasRPG {
 
         void reelTrack.offsetHeight;
 
-        const offsetToLast = (totalCards - 3) * cardWidth;
+        const reelWindow = reelTrack.parentElement;
+        const reelItemEl = reelTrack.querySelector('.reel-item');
+        const trackStyles = getComputedStyle(reelTrack);
+        const gap = parseFloat(trackStyles.columnGap || trackStyles.gap || '0') || 0;
+        const itemWidth = reelItemEl ? reelItemEl.getBoundingClientRect().width : 112;
+        const trackPaddingLeft = parseFloat(trackStyles.paddingLeft || '0') || 0;
+        const windowWidth = reelWindow ? reelWindow.getBoundingClientRect().width : 0;
+
+        // Intentamos terminar con el premio cerca del puntero central sin sobrepasar el final del track.
+        const targetIndex = Math.max(totalCards - 4, 0);
+        const targetCardCenter = trackPaddingLeft + (targetIndex * (itemWidth + gap)) + (itemWidth / 2);
+        const desiredTranslateX = targetCardCenter - (windowWidth / 2);
+        const maxTranslateX = Math.max(reelTrack.scrollWidth - windowWidth, 0);
+        const safeTranslateX = Math.min(Math.max(desiredTranslateX, 0), maxTranslateX);
+
         reelTrack.style.transition = 'transform 3.4s cubic-bezier(0.12, 0.8, 0.15, 1)';
-        reelTrack.style.transform = `translateX(-${offsetToLast}px)`;
+        reelTrack.style.transform = `translateX(-${safeTranslateX}px)`;
 
         await new Promise(resolve => setTimeout(resolve, 3450));
 
