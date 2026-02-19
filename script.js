@@ -29,6 +29,7 @@ class TareasRPG {
         this.pendingDeleteTask = null;
         this.undoDeleteTimer = null;
         this.uiSettings = { reducedMotion: false };
+        this.confirmCallback = null; // Para manejar la confirmación personalizada
         
         this.items = [
             { id: 1, name: 'Espada de Hierro', type: 'weapon', rarity: 'common', price: 50, stats: { attack: 5 }, icon: '⚔️' },
@@ -149,6 +150,14 @@ class TareasRPG {
             document.body.classList.toggle('reduced-motion', this.uiSettings.reducedMotion);
             this.saveToLocalStorage();
             this.showToast(this.uiSettings.reducedMotion ? 'Animaciones reducidas activadas.' : 'Animaciones reducidas desactivadas.');
+        });
+
+        // Event listener para el botón de confirmación del modal personalizado
+        document.getElementById('confirmBtn').addEventListener('click', () => {
+            if (this.confirmCallback) {
+                this.confirmCallback();
+                this.closeConfirmModal();
+            }
         });
     }
     
@@ -340,11 +349,19 @@ class TareasRPG {
         this.renderTasks();
         this.renderSchedule();
         this.renderCalendar();
-        this.renderSchedule();
-        this.renderCalendar();
-        this.renderCalendar();
-        this.renderSchedule(); // Agregar esta línea
         document.getElementById('taskModal').style.display = 'none';
+    }
+    
+    showConfirmModal(title, message, onConfirm) {
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        this.confirmCallback = onConfirm;
+        document.getElementById('confirmModal').style.display = 'block';
+    }
+    
+    closeConfirmModal() {
+        document.getElementById('confirmModal').style.display = 'none';
+        this.confirmCallback = null;
     }
     
     canCompleteTask(task) {
@@ -646,6 +663,44 @@ class TareasRPG {
                 break;
         }
         
+        // Crear los botones con createElement para evitar problemas de escape
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'task-actions';
+        
+        if (!task.completed) {
+            const completeBtn = document.createElement('button');
+            completeBtn.className = 'btn-complete';
+            if (!canComplete) completeBtn.disabled = true;
+            completeBtn.textContent = 'Completar';
+            completeBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.completeTask(task.id);
+            });
+            actionsDiv.appendChild(completeBtn);
+        }
+        
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn-edit';
+        editBtn.type = 'button';
+        editBtn.textContent = 'Editar';
+        editBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this.openTaskModal(task.id);
+        });
+        actionsDiv.appendChild(editBtn);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-delete';
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = 'Eliminar';
+        deleteBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            console.log('Botón eliminar presionado para tarea:', task.id);
+            this.deleteTask(task.id);
+        });
+        actionsDiv.appendChild(deleteBtn);
+        console.log('Botón eliminar creado y agregado');
+        
         taskEl.innerHTML = `
             <h4>${task.title}</h4>
             <p>${task.description || 'Sin descripción'}</p>
@@ -657,73 +712,41 @@ class TareasRPG {
             </div>
             ${streakBonus ? `<div class="bonus-info">+${streakBonus.exp} EXP, +${streakBonus.coins} 💰 por racha</div>` : ''}
             ${!canComplete && !task.completed ? '<div class="time-warning">⏰ Aún no es tiempo de completar esta misión</div>' : ''}
-            <div class="task-actions">
-                ${!task.completed ? `<button class="btn-complete" ${!canComplete ? 'disabled' : ''}>Completar</button>` : ''}
-                <button class="btn-edit" type="button">Editar</button>
-                <button class="btn-delete" type="button">Eliminar</button>
-            </div>
         `;
-
-        const completeBtn = taskEl.querySelector('.btn-complete');
-        if (completeBtn) {
-            completeBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                this.completeTask(task.id);
-            });
-        }
-
-        const editBtn = taskEl.querySelector('.btn-edit');
-        if (editBtn) {
-            editBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                this.openTaskModal(task.id);
-            });
-        }
-
-        const deleteBtn = taskEl.querySelector('.btn-delete');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                this.deleteTask(task.id);
-            });
-        }
+        
+        taskEl.appendChild(actionsDiv);
         
         return taskEl;
     }
     
     deleteTask(taskId) {
-        const shouldDelete = typeof window.confirm === 'function'
-            ? window.confirm('¿Estás seguro de que quieres eliminar esta misión?')
-            : true;
-
-        if (!shouldDelete) return;
-
+        console.log('deleteTask llamado con taskId:', taskId);
+        
         const normalizedId = String(taskId);
         const taskToDelete = this.tasks.find(t => String(t.id) === normalizedId);
 
-        this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+        console.log('Tarea encontrada:', taskToDelete);
+        if (!taskToDelete) return;
 
-        if (taskToDelete) {
-            this.pendingDeleteTask = { ...taskToDelete };
-            this.showUndoToast();
-            this.addAchievement(`🗑️ Eliminaste ${taskToDelete.title}`);
-        this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
-        this.saveToLocalStorage();
-        this.renderTasks();
-        this.renderSchedule();
-        this.renderCalendar();
-        if (confirm('¿Estás seguro de que quieres eliminar esta misión?')) {
-            const normalizedId = String(taskId);
-            this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
-            this.saveToLocalStorage();
-            this.renderTasks();
-        }
-
-        this.saveToLocalStorage();
-        this.renderTasks();
-        this.renderSchedule();
-        this.renderCalendar();
-        this.showToast('Misión eliminada.');
+        // Mostrar modal de confirmación personalizado
+        this.showConfirmModal(
+            '⚔️ Eliminar Misión',
+            `¿Estás seguro de que quieres eliminar la misión "${taskToDelete.title}"? Esta acción se puede deshacer.`,
+            () => {
+                // Callback que se ejecuta si confirma
+                this.pendingDeleteTask = { ...taskToDelete };
+                this.tasks = this.tasks.filter(t => String(t.id) !== normalizedId);
+                
+                console.log('Tarea eliminada, tareas restantes:', this.tasks.length);
+                this.showUndoToast();
+                this.addAchievement(`🗑️ Eliminaste ${taskToDelete.title}`);
+                this.saveToLocalStorage();
+                this.renderTasks();
+                this.renderSchedule();
+                this.renderCalendar();
+                this.showToast('Misión eliminada. Puedes deshacerlo en 10 segundos.');
+            }
+        );
     }
 
     undoDeleteTask() {

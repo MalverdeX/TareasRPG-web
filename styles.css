@@ -1031,3 +1031,51 @@ h1 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
 }
+
+/* Modal de confirmación personalizado */
+.confirm-modal {
+    max-width: 400px;
+    text-align: center;
+    background: linear-gradient(145deg, rgba(62, 36, 24, 0.98), rgba(44, 24, 16, 0.95));
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(255, 215, 0, 0.3);
+}
+
+.confirm-modal h2 {
+    color: var(--accent-color);
+    margin-bottom: 15px;
+    font-family: 'Cinzel', serif;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+}
+
+.confirm-modal p {
+    color: var(--text-color);
+    margin-bottom: 25px;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.btn-secondary {
+    background: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Crimson Text', serif;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}

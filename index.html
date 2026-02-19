@@ -339,6 +339,19 @@
                 <p id="levelUpText">Ahora eres nivel 2</p>
             </div>
         </div>
+
+        <!-- Modal de confirmación personalizado -->
+        <div id="confirmModal" class="modal">
+            <div class="modal-content confirm-modal">
+                <span class="close" onclick="game.closeConfirmModal()">&times;</span>
+                <h2 id="confirmTitle">Confirmar Acción</h2>
+                <p id="confirmMessage">¿Estás seguro de que quieres realizar esta acción?</p>
+                <div class="confirm-actions">
+                    <button class="btn-secondary" onclick="game.closeConfirmModal()">Cancelar</button>
+                    <button class="btn-primary" id="confirmBtn">Confirmar</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
